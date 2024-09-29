@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha512"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -28,26 +27,10 @@ const (
 )
 
 func deployBot(c *cli2.Context) error {
-	var (
-		err             error
-		mainWalletSeeds []string
-		botWalletSeeds  []string
-	)
-	if mainWalletSeeds, err = loadSeeds(c.String("main-wallet-seed")); err != nil {
-		return err
-	}
+	var err error
 
-	if len(mainWalletSeeds) != 24 {
-		return errors.New("main wallet seeds are required")
-	}
-
-	if botWalletSeeds, err = loadSeeds(c.String("bot-wallet-seed")); err != nil {
-		return err
-	}
-
-	if len(botWalletSeeds) != 24 {
-		return errors.New("new wallet seeds are required")
-	}
+	mainWalletSeeds := MustLoadSeeds(c.String("main-wallet-seed"))
+	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
 
 	// establish connection to the server
 	pool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
@@ -62,17 +45,7 @@ func deployBot(c *cli2.Context) error {
 		return err
 	}
 
-	// calculate new PK for new wallet
-	mac := hmac.New(sha512.New, []byte(strings.Join(botWalletSeeds, " ")))
-	mac.Write([]byte(""))
-	hash := mac.Sum(nil)
-
-	p := pbkdf2.Key(hash, []byte(_BasicSalt), _Iterations/256, 1, sha512.New)
-	if p[0] != 0 {
-		return errors.New("invalid new wallet seed")
-	}
-	pk := ed25519.NewKeyFromSeed(pbkdf2.Key(hash, []byte(_Salt), _Iterations, 32, sha512.New))
-
+	pk := pkFromSeed(botWalletSeeds)
 	fmt.Println("Main wallet address:", mainWallet.Address().String())
 	fmt.Println("Bot wallet public key:", pk.Public().(ed25519.PublicKey))
 
@@ -89,16 +62,9 @@ func deployBot(c *cli2.Context) error {
 // infoBot prints bot info
 func infoBot(c *cli2.Context) error {
 	var (
-		err            error
-		botWalletSeeds []string
+		err error
 	)
-	if botWalletSeeds, err = loadSeeds(c.String("bot-wallet-seed")); err != nil {
-		return err
-	}
-
-	if len(botWalletSeeds) != 24 {
-		return errors.New("new wallet seeds are required")
-	}
+	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
 
 	// establish connection to the server
 	pool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
@@ -107,41 +73,16 @@ func infoBot(c *cli2.Context) error {
 	}
 	client := utils.GetAPIClientWithTimeout(pool, time.Second*10)
 
-	// calculate new PK for new wallet
-	mac := hmac.New(sha512.New, []byte(strings.Join(botWalletSeeds, " ")))
-	mac.Write([]byte(""))
-	hash := mac.Sum(nil)
-
-	p := pbkdf2.Key(hash, []byte(_BasicSalt), _Iterations/256, 1, sha512.New)
-	if p[0] != 0 {
-		return errors.New("invalid new wallet seed")
-	}
-	pk := ed25519.NewKeyFromSeed(pbkdf2.Key(hash, []byte(_Salt), _Iterations, 32, sha512.New))
-	return bot.InfoBot(ctx, client, pk)
+	return bot.InfoBot(ctx, client, pkFromSeed(botWalletSeeds))
 }
 
 // tonupBot ton up bot
 func tonupBot(c *cli2.Context) error {
 	var (
-		err             error
-		mainWalletSeeds []string
-		botWalletSeeds  []string
+		err error
 	)
-	if mainWalletSeeds, err = loadSeeds(c.String("main-wallet-seed")); err != nil {
-		return err
-	}
-
-	if len(mainWalletSeeds) != 24 {
-		return errors.New("main wallet seeds are required")
-	}
-
-	if botWalletSeeds, err = loadSeeds(c.String("bot-wallet-seed")); err != nil {
-		return err
-	}
-
-	if len(botWalletSeeds) != 24 {
-		return errors.New("new wallet seeds are required")
-	}
+	mainWalletSeeds := MustLoadSeeds(c.String("main-wallet-seed"))
+	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
 
 	// establish connection to the server
 	pool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
@@ -156,17 +97,6 @@ func tonupBot(c *cli2.Context) error {
 		return err
 	}
 
-	// calculate new PK for new wallet
-	mac := hmac.New(sha512.New, []byte(strings.Join(botWalletSeeds, " ")))
-	mac.Write([]byte(""))
-	hash := mac.Sum(nil)
-
-	p := pbkdf2.Key(hash, []byte(_BasicSalt), _Iterations/256, 1, sha512.New)
-	if p[0] != 0 {
-		return errors.New("invalid new wallet seed")
-	}
-	pk := ed25519.NewKeyFromSeed(pbkdf2.Key(hash, []byte(_Salt), _Iterations, 32, sha512.New))
-
 	amount, err := tlb.FromTON(c.String("amount"))
 	if err != nil {
 		return err
@@ -176,23 +106,16 @@ func tonupBot(c *cli2.Context) error {
 		ctx,
 		client,
 		mainWallet,
-		pk,
+		pkFromSeed(botWalletSeeds),
 		amount,
 	)
 }
 
 func botTransfer(c *cli2.Context) error {
 	var (
-		err            error
-		botWalletSeeds []string
+		err error
 	)
-	if botWalletSeeds, err = loadSeeds(c.String("bot-wallet-seed")); err != nil {
-		return err
-	}
-
-	if len(botWalletSeeds) != 24 {
-		return errors.New("new wallet seeds are required")
-	}
+	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
 
 	// establish connection to the server
 	pool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
@@ -200,17 +123,6 @@ func botTransfer(c *cli2.Context) error {
 		return err
 	}
 	client := utils.GetAPIClientWithTimeout(pool, time.Second*10)
-
-	// calculate new PK for new wallet
-	mac := hmac.New(sha512.New, []byte(strings.Join(botWalletSeeds, " ")))
-	mac.Write([]byte(""))
-	hash := mac.Sum(nil)
-
-	p := pbkdf2.Key(hash, []byte(_BasicSalt), _Iterations/256, 1, sha512.New)
-	if p[0] != 0 {
-		return errors.New("invalid new wallet seed")
-	}
-	pk := ed25519.NewKeyFromSeed(pbkdf2.Key(hash, []byte(_Salt), _Iterations, 32, sha512.New))
 
 	amount, err := tlb.FromTON(c.String("amount"))
 	if err != nil {
@@ -225,32 +137,80 @@ func botTransfer(c *cli2.Context) error {
 	return bot.Transfer(
 		ctx,
 		client,
-		pk,
+		pkFromSeed(botWalletSeeds),
 		destAddr,
 		amount,
 	)
 }
 
-func loadSeeds(seedsOrSeedsFile string) ([]string, error) {
+func botBundle(c *cli2.Context) error {
+	var (
+		err error
+	)
+	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+
+	// establish connection to the server
+	connPool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
+	if err != nil {
+		return err
+	}
+	client := utils.GetAPIClientWithTimeout(connPool, time.Second*10)
+
+	amount, err := tlb.FromTON(c.String("amount"))
+	if err != nil {
+		return err
+	}
+
+	poolAddr, err := address.ParseAddr(c.String("pool-addr"))
+	if err != nil {
+		return err
+	}
+
+	return bot.Bundle(
+		ctx,
+		client,
+		pkFromSeed(botWalletSeeds),
+		poolAddr,
+		amount,
+		tlb.MustFromTON("0.00000001"),
+	)
+}
+
+func MustLoadSeeds(seedsOrSeedsFile string) []string {
 	seeds := []string{}
 
 	if len(seedsOrSeedsFile) == 0 {
-		return seeds, errors.New("seeds or seeds file is required")
-	}
-
-	seeds = strings.SplitN(seedsOrSeedsFile, " ", -1)
-	if len(seeds) == 24 {
-		return seeds, nil
+		panic("seeds are required")
 	}
 
 	if _, err := os.Stat(seedsOrSeedsFile); err == nil {
 		seedsFromFile, err := os.ReadFile(seedsOrSeedsFile)
 		if err != nil {
-			return []string{}, err
+			panic("failed to read seeds file")
 		}
 
-		return strings.Split(string(strings.Trim(string(seedsFromFile), "\n")), " "), nil
+		return strings.Split(string(strings.Trim(string(seedsFromFile), "\n")), " ")
+	} else {
+		seeds = strings.SplitN(seedsOrSeedsFile, " ", -1)
 	}
 
-	return []string{}, nil
+	if len(seeds) != 24 {
+		panic("invalid seeds")
+	}
+
+	return seeds
+}
+
+func pkFromSeed(seeds []string) ed25519.PrivateKey {
+	// calculate new PK for new wallet
+	mac := hmac.New(sha512.New, []byte(strings.Join(seeds, " ")))
+	mac.Write([]byte(""))
+	hash := mac.Sum(nil)
+
+	p := pbkdf2.Key(hash, []byte(_BasicSalt), _Iterations/256, 1, sha512.New)
+	if p[0] != 0 {
+		panic("invalid new wallet seed")
+	}
+	return ed25519.NewKeyFromSeed(pbkdf2.Key(hash, []byte(_Salt), _Iterations, 32, sha512.New))
+
 }

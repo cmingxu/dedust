@@ -2,6 +2,7 @@ package bot
 
 import (
 	"crypto/ed25519"
+	"math/big"
 
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/tlb"
@@ -13,6 +14,16 @@ import (
 
 var (
 	MessageTTL = 60 * 3
+)
+
+var (
+	// dedust native swap gas
+	GasAmount = tlb.MustFromTON("0.2").Nano()
+
+	// dedust native vault address
+	DedustNativeVault = address.MustParseAddr("EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_")
+
+	DedustSwapMaigic = uint64(0xea06185d)
 )
 
 type BotWallet struct {
@@ -81,4 +92,48 @@ func (w *BotWallet) BuildTransfer(to *address.Address, amount tlb.Coins, bounce 
 			Body:        body,
 		},
 	}, nil
+}
+
+// https://github.com/dedust-io/sdk/blob/main/src/contracts/dex/vault/VaultNative.ts
+func (w *BotWallet) BuildBundle(poolAddr *address.Address,
+	amount *big.Int, limit *big.Int, nextLimit *big.Int) (_ *wallet.Message) {
+	bounce := true
+
+	swapParamsRef := cell.BeginCell().
+		MustStoreUInt(0, 32).   // deadline
+		MustStoreAddr(w.addr).  // receipent address
+		MustStoreAddr(nil).     // referer address
+		MustStoreMaybeRef(nil). // fulfillPayload
+		MustStoreMaybeRef(nil). // rejectPayload
+		EndCell()
+
+		// sell imeidiately
+	next := cell.BeginCell().
+		MustStoreAddr(poolAddr). // next pool addr
+		MustStoreUInt(0, 1).
+		MustStoreCoins(nextLimit.Uint64()). // next limit
+		MustStoreMaybeRef(nil).
+		EndCell()
+
+	body := cell.BeginCell().
+		MustStoreUInt(DedustSwapMaigic, 32). // magic
+		MustStoreUInt(0, 64).                // queryId
+		MustStoreCoins(amount.Uint64()).     // amount
+		MustStoreAddr(poolAddr).             // poolAddr
+		MustStoreUInt(0, 1).                 // Kind
+		MustStoreCoins(limit.Uint64()).      // Fee
+		MustStoreMaybeRef(next).
+		MustStoreRef(swapParamsRef).
+		EndCell()
+
+	return &wallet.Message{
+		Mode: wallet.PayGasSeparately + wallet.IgnoreErrors,
+		InternalMessage: &tlb.InternalMessage{
+			IHRDisabled: true,
+			Bounce:      bounce,
+			DstAddr:     DedustNativeVault,
+			Amount:      tlb.FromNanoTON(new(big.Int).Add(amount, GasAmount)),
+			Body:        body,
+		},
+	}
 }

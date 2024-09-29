@@ -16,7 +16,6 @@ func Transfer(ctx context.Context,
 	destAddr *address.Address,
 	amount tlb.Coins,
 ) error {
-
 	botAddr := botAddress(botprivateKey.Public().(ed25519.PublicKey))
 
 	masterBlock, err := client.GetMasterchainInfo(ctx)

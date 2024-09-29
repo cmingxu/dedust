@@ -70,11 +70,14 @@ var (
 		Value: "UQCwSxqefElovEPlpZ8bIEL_KXqWuqoOhwb65uYjos9bCDcM",
 		Usage: "main wallet address to send",
 	}
+
+	poolAddr = cli2.StringFlag{
+		Name:  "pool-addr",
+		Usage: "pool address to trade",
+	}
 )
 
 func Run(args []string) int {
-	fmt.Println("Running CLI with args: ", args)
-
 	app := &cli2.App{
 		Name:  "dedust",
 		Usage: "A CLI tool to dedust your code",
@@ -205,6 +208,22 @@ func Run(args []string) int {
 						return err
 					}
 					return botTransfer(c)
+				},
+			},
+			{
+				Name:        "bot-bundle",
+				Description: "to bundle some ton from bot",
+				Flags: []cli2.Flag{
+					&tonConfig,
+					&botWalletSeed,
+					&poolAddr,
+					&amount,
+				},
+				Action: func(c *cli2.Context) error {
+					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
+						return err
+					}
+					return botBundle(c)
 				},
 			},
 
