@@ -1,0 +1,47 @@
+package utils
+
+import (
+	"context"
+	"os"
+	"time"
+
+	"github.com/xssnick/tonutils-go/liteclient"
+	"github.com/xssnick/tonutils-go/ton"
+)
+
+var (
+	pool *liteclient.ConnectionPool
+	ctx  context.Context
+)
+
+func GetConnectionPool(urlOrFile string) (pool *liteclient.ConnectionPool,
+	ctx context.Context,
+	err error) {
+	if pool != nil {
+		return pool, ctx, nil
+	}
+
+	pool = liteclient.NewConnectionPool()
+
+	var connectErr error
+	if _, err := os.Stat(urlOrFile); err != nil && os.IsNotExist(err) {
+		connectErr = pool.AddConnectionsFromConfigUrl(context.Background(), urlOrFile)
+	} else {
+		connectErr = pool.AddConnectionsFromConfigFile(urlOrFile)
+	}
+
+	if connectErr != nil {
+		return nil, nil, connectErr
+	}
+
+	// bound all requests to single ton node
+	return pool, pool.StickyContext(context.Background()), nil
+}
+
+func GetAPIClient(pool *liteclient.ConnectionPool) ton.APIClientWrapped {
+	return ton.NewAPIClient(pool, ton.ProofCheckPolicyUnsafe).WithRetry()
+}
+
+func GetAPIClientWithTimeout(pool *liteclient.ConnectionPool, timeout time.Duration) ton.APIClientWrapped {
+	return ton.NewAPIClient(pool, ton.ProofCheckPolicyUnsafe).WithRetry().WithTimeout(timeout)
+}
