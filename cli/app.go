@@ -75,6 +75,16 @@ var (
 		Name:  "pool-addr",
 		Usage: "pool address to trade",
 	}
+
+	jettonMasterAddr = cli2.StringFlag{
+		Name:  "jetton-master-addr",
+		Usage: "jetton master address",
+	}
+
+	vaultAddr = cli2.StringFlag{
+		Name:  "vault-addr",
+		Usage: "dedust vault address",
+	}
 )
 
 func Run(args []string) int {
@@ -210,6 +220,7 @@ func Run(args []string) int {
 					return botTransfer(c)
 				},
 			},
+
 			{
 				Name:        "bot-bundle",
 				Description: "to bundle some ton from bot",
@@ -224,6 +235,24 @@ func Run(args []string) int {
 						return err
 					}
 					return botBundle(c)
+				},
+			},
+
+			{
+				Name:        "bot-dedust-sell",
+				Description: "to sell some ton from bot",
+				Flags: []cli2.Flag{
+					&tonConfig,
+					&botWalletSeed,
+					&jettonMasterAddr,
+					&vaultAddr,
+					&poolAddr,
+				},
+				Action: func(c *cli2.Context) error {
+					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
+						return err
+					}
+					return botDedustSell(c)
 				},
 			},
 

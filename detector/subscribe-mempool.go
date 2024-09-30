@@ -118,8 +118,6 @@ func (d *Detector) subscribe(ctx context.Context,
 			return true
 		})
 
-		println("eeeeeeeeee")
 		mpResponseCh <- &mpResponse
-		println("333333333333")
 	}
 }

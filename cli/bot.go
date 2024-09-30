@@ -176,6 +176,44 @@ func botBundle(c *cli2.Context) error {
 	)
 }
 
+func botDedustSell(c *cli2.Context) error {
+	var (
+		err error
+	)
+	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+
+	// establish connection to the server
+	connPool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
+	if err != nil {
+		return err
+	}
+	client := utils.GetAPIClientWithTimeout(connPool, time.Second*10)
+
+	jettonMaterAddr, err := address.ParseAddr(c.String("jetton-master-addr"))
+	if err != nil {
+		return err
+	}
+
+	vaultAddr, err := address.ParseAddr(c.String("vault-addr"))
+	if err != nil {
+		return err
+	}
+
+	poolAddr, err := address.ParseAddr(c.String("pool-addr"))
+	if err != nil {
+		return err
+	}
+
+	return bot.DedustSell(
+		ctx,
+		client,
+		pkFromSeed(botWalletSeeds),
+		jettonMaterAddr,
+		vaultAddr,
+		poolAddr,
+	)
+}
+
 func MustLoadSeeds(seedsOrSeedsFile string) []string {
 	seeds := []string{}
 

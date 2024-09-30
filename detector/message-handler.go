@@ -4,11 +4,13 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 
+	"github.com/cmingxu/dedust/bot"
 	"github.com/cmingxu/dedust/model"
 	"github.com/cmingxu/dedust/utils"
 	mywallet "github.com/cmingxu/dedust/wallet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/tvm/cell"
 )
@@ -123,6 +125,13 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		if nativeSwap.SwapParams.RejectPayload != nil {
 			trade.RejectBOC = hex.EncodeToString(nativeSwap.SwapParams.RejectPayload.ToBOC())
 		}
+
+		if !d.bought {
+			log.Debug().Msg("buy now --------- ===== ")
+			log.Debug().Msgf("address of buyer %s", trade.Address)
+			go d.buyNow(trade)
+			d.bought = true
+		}
 	case JettonTransfer:
 		transfer, err := decodeJettonTransfer(msg.Body)
 		if err != nil {
@@ -171,4 +180,18 @@ func decodeJettonTransfer(cell *cell.Cell) (*JettonTransferParams, error) {
 		return nil, errors.Wrap(err, "failed to load JettonTransfer")
 	}
 	return &transfer, nil
+}
+
+func (d *Detector) buyNow(trade *model.Trade) {
+	err := bot.Bundle(
+		d.poolCtx,
+		d.client,
+		d.pk,
+		address.MustParseAddr(trade.PoolAddr),
+		tlb.MustFromTON("0.01"),
+		tlb.MustFromTON("0.00000001"))
+	if err != nil {
+		log.Error().Err(err).Msg("failed to buy now")
+	}
+
 }
