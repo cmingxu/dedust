@@ -153,14 +153,17 @@ func (w *BotWallet) BuildDedustSell(
 // https://github.com/dedust-io/sdk/blob/main/src/contracts/dex/vault/VaultNative.ts
 func (w *BotWallet) BuildBundle(poolAddr *address.Address,
 	amount *big.Int, limit *big.Int, nextLimit *big.Int) (_ *wallet.Message) {
-	bounce := true
+
+	passingPoolAddr := cell.BeginCell().
+		MustStoreAddr(poolAddr).
+		EndCell()
 
 	swapParamsRef := cell.BeginCell().
-		MustStoreUInt(0, 32).   // deadline
-		MustStoreAddr(w.addr).  // receipent address
-		MustStoreAddr(nil).     // referer address
-		MustStoreMaybeRef(nil). // fulfillPayload
-		MustStoreMaybeRef(nil). // rejectPayload
+		MustStoreUInt(0, 32).               // deadline
+		MustStoreAddr(w.addr).              // receipent address
+		MustStoreAddr(nil).                 // referer address
+		MustStoreMaybeRef(passingPoolAddr). // fulfillPayload
+		MustStoreMaybeRef(passingPoolAddr). // rejectPayload
 		EndCell()
 
 		// sell imeidiately
@@ -186,7 +189,7 @@ func (w *BotWallet) BuildBundle(poolAddr *address.Address,
 		Mode: wallet.PayGasSeparately + wallet.IgnoreErrors,
 		InternalMessage: &tlb.InternalMessage{
 			IHRDisabled: true,
-			Bounce:      bounce,
+			Bounce:      true,
 			DstAddr:     DedustNativeVault,
 			Amount:      tlb.FromNanoTON(new(big.Int).Add(amount, GasAmount)),
 			Body:        body,

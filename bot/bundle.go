@@ -22,8 +22,8 @@ func Bundle(
 
 	fmt.Println("Bot address:", botAddr.String())
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 6)
-	nextLimit := tlb.MustFromTON("0.00001").Nano()
+	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 0)
+	nextLimit := tlb.MustFromTON("1111111111111110.00001").Nano() // big number, make sure abort
 	msg := botWallet.BuildBundle(poolAddr, tonIn.Nano(), limit.Nano(), nextLimit)
 
 	return botWallet.Send(ctx, msg, true)
