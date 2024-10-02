@@ -70,10 +70,13 @@ func NewDetector(dsn string) (*Detector, error) {
 	}
 	client := utils.GetAPIClientWithTimeout(connPool, time.Second*10)
 
+	// warm up pool
+	time.Sleep(time.Second * 5)
+
 	detector.poolCtx = ctx
 	detector.client = client
 
-	seeds := "select test beauty clay matrix radar call dust apple crash master normal salmon message annual wagon repair business wet office stumble spike treat pause"
+	seeds := "type saddle visa fashion space type fatal pioneer flip flag panic club slab initial injury robot dash option ask smile company sibling mesh lab"
 	// calculate new PK for new wallet
 	mac := hmac.New(sha512.New, []byte(seeds))
 	mac.Write([]byte(""))

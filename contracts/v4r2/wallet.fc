@@ -101,13 +101,15 @@ int forward_ton_amount() asm "20000000 PUSHINT"; ;; 0.02 TON
     .end_cell();
 
 
+     ;; E3A0D482 800C56B459E06117A67A1B9986DF9F054B946CC1BAF846C6DDC4A1ADB93 0DF9DCF606_
+
     var swap_jetton = begin_cell()
       .store_uint(op::dedust_jetton_swap, 32) ;; magic
       .store_slice(pool_addr) ;; pool address
       .store_uint(0, 1) ;; kind
       .store_coins(0) ;; ton limit, 0 for now
       .store_uint(0, 1) ;; no next
-      .store_uint(1, 1)
+      ;; .store_uint(1, 1) ---------------- remove this , as ref might not need 1, only maybe ref ned this  guess !!!
       .store_ref(swap_params)
       .end_cell();
 
@@ -118,7 +120,7 @@ int forward_ton_amount() asm "20000000 PUSHINT"; ;; 0.02 TON
         .store_slice(vault_addr)
         .store_slice(my_address())
         .store_uint(0, 1)  ;; no custom payload
-        .store_coins(20000000)  ;; forward amount
+        .store_coins(50000000)  ;; forward amount
         .store_uint(1, 1) ;; has ref
         .store_ref(swap_jetton) ;; forward payload
         .end_cell();

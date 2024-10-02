@@ -35,7 +35,21 @@ func GetConnectionPool(urlOrFile string) (pool *liteclient.ConnectionPool,
 	}
 
 	// bound all requests to single ton node
-	return pool, pool.StickyContext(context.Background()), nil
+
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+
+		client := ton.NewAPIClient(pool, ton.ProofCheckPolicyUnsafe).WithRetry()
+		for range ticker.C {
+			_, err := client.GetTime(context.Background())
+			if err != nil {
+				continue
+			}
+		}
+	}()
+
+	return pool, context.Background(), nil
 }
 
 func GetAPIClient(pool *liteclient.ConnectionPool) ton.APIClientWrapped {
