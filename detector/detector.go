@@ -2,20 +2,14 @@ package detector
 
 import (
 	"context"
-	"crypto/ed25519"
-	"crypto/hmac"
-	"crypto/sha512"
 	"sync"
 	"time"
 
 	"github.com/cmingxu/dedust/model"
-	"github.com/cmingxu/dedust/utils"
-	"golang.org/x/crypto/pbkdf2"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 	"github.com/xssnick/tonutils-go/tlb"
-	"github.com/xssnick/tonutils-go/ton"
 )
 
 const (
@@ -37,12 +31,6 @@ type Detector struct {
 
 	stopChan chan struct{}
 	stopOnce sync.Once
-
-	//////////////////////////
-	bought  bool
-	client  ton.APIClientWrapped
-	poolCtx context.Context
-	pk      ed25519.PrivateKey
 }
 
 func NewDetector(dsn string) (*Detector, error) {
@@ -62,32 +50,6 @@ func NewDetector(dsn string) (*Detector, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// establish connection to the server
-	connPool, ctx, err := utils.GetConnectionPool("https://ton.org/global-config.json")
-	if err != nil {
-		return nil, err
-	}
-	client := utils.GetAPIClientWithTimeout(connPool, time.Second*10)
-
-	// warm up pool
-	time.Sleep(time.Second * 5)
-
-	detector.poolCtx = ctx
-	detector.client = client
-
-	seeds := "type saddle visa fashion space type fatal pioneer flip flag panic club slab initial injury robot dash option ask smile company sibling mesh lab"
-	// calculate new PK for new wallet
-	mac := hmac.New(sha512.New, []byte(seeds))
-	mac.Write([]byte(""))
-	hash := mac.Sum(nil)
-
-	p := pbkdf2.Key(hash, []byte(_BasicSalt), _Iterations/256, 1, sha512.New)
-	if p[0] != 0 {
-		panic("invalid new wallet seed")
-	}
-	detector.pk = ed25519.NewKeyFromSeed(pbkdf2.Key(hash, []byte(_Salt), _Iterations, 32, sha512.New))
-	detector.bought = false
 
 	return detector, nil
 }
