@@ -129,6 +129,7 @@ func Run(args []string) int {
 					&user,
 					&password,
 					&database,
+					&tonConfig,
 				},
 				Action: func(c *cli2.Context) error {
 					if err := utils.SetupLogger(c.String("loglevel")); err != nil {

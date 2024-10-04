@@ -23,9 +23,11 @@ func Request(ctx context.Context, method string, url string, body io.Reader) ([]
 	req.Header.Set("User-Agent", "dedust-cli/1.0")
 	client := &http.Client{
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy:           http.ProxyFromEnvironment,
+			MaxIdleConns:    100,
+			MaxConnsPerHost: 100,
 		},
-		Timeout: time.Second * 10,
+		Timeout: time.Second * 5,
 	}
 
 	resp, err := client.Do(req)

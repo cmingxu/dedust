@@ -18,7 +18,7 @@ var (
 
 var (
 	// dedust native swap gas
-	GasAmount = tlb.MustFromTON("0.2").Nano()
+	GasAmount = tlb.MustFromTON("0.1").Nano()
 
 	// dedust native vault address
 	DedustNativeVault = address.MustParseAddr("EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_")

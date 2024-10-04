@@ -22,7 +22,7 @@ func Bundle(
 
 	fmt.Println("Bot address:", botAddr.String())
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 10)
+	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 1)
 
 	nextLimit := tonIn
 	msg := botWallet.BuildBundle(poolAddr, tonIn.Nano(), limit.Nano(), nextLimit.Nano())

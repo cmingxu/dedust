@@ -60,7 +60,7 @@ func (d *Detector) PoolReserveUpdater(ctx context.Context) error {
 func (d *Detector) updatePoolReserve(ctx context.Context, pool *model.Pool,
 	accountId string, lt uint64) {
 	i := 0
-	for i < 100 {
+	for i < 40 {
 		resp, err := utils.Request(ctx, http.MethodGet, fmt.Sprintf(AccountInfoURL, accountId), nil)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to request transaction detail")
@@ -77,8 +77,8 @@ func (d *Detector) updatePoolReserve(ctx context.Context, pool *model.Pool,
 
 		if anton_last_lt >= lt {
 			log.Debug().Msgf("lastest anton account info found at LT %d after %d tries", lt, i)
-			pool.Asset0Reseve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.0").String()
-			pool.Asset1Reseve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.1").String()
+			pool.Asset0Reserve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.0").String()
+			pool.Asset1Reserve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.1").String()
 			pool.Lt = lt
 
 			if err := pool.UpdateReserves(d.db); err != nil {
@@ -86,7 +86,7 @@ func (d *Detector) updatePoolReserve(ctx context.Context, pool *model.Pool,
 				return
 			}
 			log.Debug().Msgf("pool %s updated new reserves %s <=> %s",
-				pool.Address, pool.Asset0Reseve, pool.Asset1Reseve)
+				pool.Address, pool.Asset0Reserve, pool.Asset1Reserve)
 
 			break
 		}

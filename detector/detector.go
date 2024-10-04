@@ -12,13 +12,6 @@ import (
 	"github.com/xssnick/tonutils-go/tlb"
 )
 
-const (
-	_Iterations   = 100000
-	_Salt         = "TON default seed"
-	_BasicSalt    = "TON seed version"
-	_PasswordSalt = "TON fast seed version"
-)
-
 type Detector struct {
 	db *sqlx.DB
 
@@ -61,6 +54,7 @@ func (d *Detector) Run() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	bundleChanceCh := make(chan *BundleChance, 10)
 	mpResponseCh := make(chan *MPResponse, 10)
 
 	poolsRenewedCh := make(chan struct{}, 1)
@@ -74,11 +68,17 @@ func (d *Detector) Run() error {
 		}
 	}()
 
-	//go func() {
-	//	if err := d.PoolReserveUpdater(ctx); err != nil {
-	//		log.Error().Err(err).Msg("failed to subscribe to pool reserve")
-	//	}
-	//}()
+	go func() {
+		if err := d.PoolReserveUpdater(ctx); err != nil {
+			log.Error().Err(err).Msg("failed to subscribe to pool reserve")
+		}
+	}()
+
+	go func() {
+		if err := d.RunWSServer(ctx, bundleChanceCh); err != nil {
+			log.Error().Err(err).Msg("failed to run websocket server")
+		}
+	}()
 
 	for {
 		select {
@@ -121,7 +121,14 @@ func (d *Detector) Run() error {
 			continue
 		}
 
-		if err := d.handleExternalMsg(pool, outMessage.AsExternalIn()); err != nil {
+		// trade is return even err is not nil
+		trade, err := d.parseTrade(pool, outMessage.AsExternalIn())
+		if chance, err := BuildBundleChance(pool, trade); err == nil {
+			log.Info().Msgf("BundleChance %+v", chance)
+			bundleChanceCh <- chance
+		}
+
+		if err != nil {
 			log.Err(err).Msg("failed to handle external message")
 			continue
 		}

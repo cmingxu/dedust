@@ -26,6 +26,9 @@ recipient VARCHAR(128) NOT NULL,
 referrer VARCHAR(128) NOT NULL,
 fullfillBOC TEXT NOT NULL,
 rejectBOC TEXT NOT NULL,
+lastestReserve0 VARCHAR(256) NOT NULL,
+lastestReserve1 VARCHAR(256) NOT NULL,
+latestPoolLt VARCHAR(64) NOT NULL,
 createdAt timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 `
@@ -65,23 +68,26 @@ const (
 )
 
 type Trade struct {
-	Id          uint64     `json:"id" db:"id"`
-	Hash        string     `json:"hash" db:"hash"`
-	WalletType  WalletType `json:"walletType" db:"walletType"`
-	SwapType    SwapType   `json:"swapType" db:"swapType"`
-	TradeType   TradeType  `json:"tradeType" db:"tradeType"`
-	Address     string     `json:"address" db:"address"`
-	PoolAddr    string     `json:"poolAddr" db:"poolAddr"`
-	AmountIn    float32    `json:"amountIn" db:"amountIn"`
-	Boc         string     `json:"boc" db:"boc"`
-	Amount      float32    `json:"amount" db:"amount"`
-	TokenAmount string     `json:"tokenAmount" db:"tokenAmount"`
-	Limit       string     `json:"limit" db:"limits"`
-	Recipient   string     `json:"recipient" db:"recipient"`
-	Referrer    string     `json:"referrer" db:"referrer"`
-	FullfillBOC string     `json:"fullfillBOC" db:"fullfillBOC"`
-	RejectBOC   string     `json:"rejectBOC" db:"rejectBOC"`
-	CreatedAt   *time.Time `json:"createdAt" db:"createdAt"`
+	Id             uint64     `json:"id" db:"id"`
+	Hash           string     `json:"hash" db:"hash"`
+	WalletType     WalletType `json:"walletType" db:"walletType"`
+	SwapType       SwapType   `json:"swapType" db:"swapType"`
+	TradeType      TradeType  `json:"tradeType" db:"tradeType"`
+	Address        string     `json:"address" db:"address"`
+	PoolAddr       string     `json:"poolAddr" db:"poolAddr"`
+	AmountIn       float32    `json:"amountIn" db:"amountIn"`
+	Boc            string     `json:"boc" db:"boc"`
+	Amount         float32    `json:"amount" db:"amount"`
+	TokenAmount    string     `json:"tokenAmount" db:"tokenAmount"`
+	Limit          string     `json:"limit" db:"limits"`
+	Recipient      string     `json:"recipient" db:"recipient"`
+	Referrer       string     `json:"referrer" db:"referrer"`
+	FullfillBOC    string     `json:"fullfillBOC" db:"fullfillBOC"`
+	RejectBOC      string     `json:"rejectBOC" db:"rejectBOC"`
+	LatestReserve0 string     `json:"latestReserve0" db:"lastestReserve0"`
+	LatestReserve1 string     `json:"latestReserve1" db:"lastestReserve1"`
+	LatestPoolLt   uint64     `json:"latestPool" db:"latestPoolLt"`
+	CreatedAt      *time.Time `json:"createdAt" db:"createdAt"`
 }
 
 func CreateTradeTableIfNotExists(db *sqlx.DB) error {
@@ -100,7 +106,7 @@ func CreateTradeTableIfNotExists(db *sqlx.DB) error {
 
 func (t *Trade) SaveToDB(db *sqlx.DB) error {
 	_, err := db.NamedExec(`
-INSERT INTO trades (hash, walletType, swapType, tradeType, address, poolAddr, amountIn, boc, amount, tokenAmount, limits, recipient, referrer, fullfillBOC, rejectBOC) values(:hash, :walletType, :swapType, :tradeType, :address, :poolAddr, :amountIn, :boc, :amount, :tokenAmount, :limits, :recipient, :referrer, :fullfillBOC, :rejectBOC)`, t)
+INSERT INTO trades (hash, walletType, swapType, tradeType, address, poolAddr, amountIn, boc, amount, tokenAmount, limits, recipient, referrer, fullfillBOC, rejectBOC, lastestReserve0, lastestReserve1, latestPoolLt) values(:hash, :walletType, :swapType, :tradeType, :address, :poolAddr, :amountIn, :boc, :amount, :tokenAmount, :limits, :recipient, :referrer, :fullfillBOC, :rejectBOC, :lastestReserve0, :lastestReserve1, :latestPoolLt)`, t)
 	return err
 }
 

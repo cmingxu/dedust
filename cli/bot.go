@@ -71,7 +71,7 @@ func infoBot(c *cli2.Context) error {
 	if err != nil {
 		return err
 	}
-	client := utils.GetAPIClientWithTimeout(pool, time.Second*10)
+	client := utils.GetAPIClientWithTimeout(pool, time.Second*30)
 
 	return bot.InfoBot(ctx, client, pkFromSeed(botWalletSeeds))
 }
@@ -187,7 +187,7 @@ func botDedustSell(c *cli2.Context) error {
 	if err != nil {
 		return err
 	}
-	client := utils.GetAPIClientWithTimeout(connPool, time.Second*10)
+	client := utils.GetAPIClientWithTimeout(connPool, time.Second*30)
 
 	jettonMaterAddr, err := address.ParseAddr(c.String("jetton-master-addr"))
 	if err != nil {
