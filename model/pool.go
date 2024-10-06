@@ -13,6 +13,15 @@ import (
 	"github.com/xssnick/tonutils-go/ton"
 )
 
+var (
+	ValidJettonWalletHash = []string{
+		"vrBoPr64kn/p/I7AoYvH3ReJlomCWhIeq0bFo6hg0M4=",
+		"iUaPAseOVwgC45l5yFFvw43wfqdqSDV+BTbyuns+43s=",
+		"eqG3vmgENk7aC/453lGY0t2R9O7/XrVy7gSz6mqogdk=",
+		"p2DWKdU0PnbQRQF9ncIW/IoweoN3gV/rKwpcSQ5zNIY=",
+	}
+)
+
 const PoolCreationDDL = `
 		CREATE TABLE IF NOT EXISTS pools (
 			id int PRIMARY KEY AUTO_INCREMENT,
@@ -104,6 +113,8 @@ type Pool struct {
 
 	CreatedAt *time.Time `json:"createdAt" db:"createdAt"`
 
+	UpdatedAt time.Time `json:"-" db:"-"`
+
 	Batch int32 `json:"-" db:"-"`
 }
 
@@ -160,7 +171,14 @@ func LoadPoolsFromJSON(data []byte) ([]*Pool, error) {
 func LoadPoolsFromDB(db *sqlx.DB, outstandingOnly bool) ([]*Pool, error) {
 	pools := make([]*Pool, 0)
 	if outstandingOnly {
-		err := db.Select(&pools, fmt.Sprintf("SELECT * FROM pools WHERE asset0Type = 'native' and LENGTH(asset0Reserve) >= %d", ReseveLenForHundrends))
+		statement := fmt.Sprintf("SELECT * FROM pools WHERE asset0Type = 'native' and LENGTH(asset0Reserve) >= %d AND asset1TokenWalletCode in (?)", ReseveLenForHundrends)
+		query, args, err := sqlx.In(statement, ValidJettonWalletHash)
+		if err != nil {
+			return nil, err
+		}
+
+		query = db.Rebind(query)
+		err = db.Select(&pools, query, args...)
 		return pools, err
 	}
 

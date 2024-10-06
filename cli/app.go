@@ -85,6 +85,12 @@ var (
 		Name:  "vault-addr",
 		Usage: "dedust vault address",
 	}
+
+	preUpdateReserve = cli2.BoolFlag{
+		Name:  "pre-update-reserve",
+		Value: false,
+		Usage: "whether update reserve before detect(with runGetMethod(get_reserves)",
+	}
 )
 
 func Run(args []string) int {
@@ -148,6 +154,8 @@ func Run(args []string) int {
 					&user,
 					&password,
 					&database,
+					&tonConfig,
+					&preUpdateReserve,
 				},
 				Action: func(c *cli2.Context) error {
 					if err := utils.SetupLogger(c.String("loglevel")); err != nil {

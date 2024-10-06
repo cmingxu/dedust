@@ -36,7 +36,7 @@ func DedustSell(
 	fmt.Println("Bot jetton wallet address:", botJettonWalletAddr.String())
 	fmt.Println("Jetton amount of bot:", jettonAmountOfBot.String())
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 3)
+	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 2)
 	msg := botWallet.BuildDedustSell(botJettonWalletAddr,
 		dedustVaultAddr,
 		poolAddr,

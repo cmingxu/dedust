@@ -14,7 +14,7 @@ import (
 // pool renew interval 1 hour for now
 const PoolRenewInterval = 60 * 60 * time.Second
 
-// filter pool 
+// filter pool
 const OutstandingPoolOnly = true
 
 func (d *Detector) PerodicallyRenewPoolsFromDB(ctx context.Context,
@@ -56,7 +56,6 @@ func (d *Detector) renewPoolsFromDB(db *sqlx.DB) (err error, renewed bool) {
 			renewed = true
 		}
 	}
-
 
 	return nil, true
 }

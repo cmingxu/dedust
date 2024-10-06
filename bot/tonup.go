@@ -44,5 +44,5 @@ func Tonup(ctx context.Context,
 
 	fmt.Printf("transfer %s of TON to %s\n", amount.String(), botAddr.String())
 
-	return mainWallet.TransferNoBounce(ctx, botAddr, amount, "you deserved it", true)
+	return mainWallet.TransferNoBounce(ctx, botAddr, amount, "6-_-9", true)
 }

@@ -6,10 +6,14 @@ import (
 	"time"
 
 	"github.com/cmingxu/dedust/model"
+	"github.com/cmingxu/dedust/utils"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/patrickmn/go-cache"
 	"github.com/rs/zerolog/log"
+	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
+	"github.com/xssnick/tonutils-go/ton"
 )
 
 type Detector struct {
@@ -24,9 +28,17 @@ type Detector struct {
 
 	stopChan chan struct{}
 	stopOnce sync.Once
+
+	// api client
+	apiClient ton.APIClientWrapped
+	connPool  *liteclient.ConnectionPool
+	apiCtx    context.Context
+
+	// cache chance
+	chanceCache *cache.Cache
 }
 
-func NewDetector(dsn string) (*Detector, error) {
+func NewDetector(dsn string, tonConfig string) (*Detector, error) {
 	var err error
 	detector := &Detector{
 		db: nil,
@@ -44,10 +56,20 @@ func NewDetector(dsn string) (*Detector, error) {
 		return nil, err
 	}
 
+	detector.connPool, detector.apiCtx, err = utils.GetConnectionPool(tonConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	detector.apiClient = utils.GetAPIClient(detector.connPool)
+
+	// a cache expire at 5s and purge at 10s
+	detector.chanceCache = cache.New(5*time.Second, 10*time.Second)
+
 	return detector, nil
 }
 
-func (d *Detector) Run() error {
+func (d *Detector) Run(preUpdate bool) error {
 	if err, _ := d.renewPoolsFromDB(d.db); err != nil {
 		return err
 	}
@@ -59,18 +81,26 @@ func (d *Detector) Run() error {
 
 	poolsRenewedCh := make(chan struct{}, 1)
 	poolsRenewedCh <- struct{}{}
+
+	go func() {
+		if err := d.PoolReserveConsumer(ctx); err != nil {
+			log.Error().Err(err).Msg("failed to subscribe to pool reserve")
+		}
+	}()
+
+	if preUpdate {
+		if err := d.PoolReserveUpdater(ctx); err != nil {
+			log.Error().Err(err).Msg("failed to update pool reserve")
+		}
+	}
+
 	// fetching pool information from DB and update those in memory
 	go d.PerodicallyRenewPoolsFromDB(ctx, poolsRenewedCh)
+
 	go func() {
 		// subscribe to mempool, should reconnect websocket upon poolsRenewedCh signal
 		if err := d.SubscribeTradeSignalFromTonAPIMemPool(ctx, poolsRenewedCh, mpResponseCh); err != nil {
 			log.Error().Err(err).Msg("failed to subscribe to mempool")
-		}
-	}()
-
-	go func() {
-		if err := d.PoolReserveUpdater(ctx); err != nil {
-			log.Error().Err(err).Msg("failed to subscribe to pool reserve")
 		}
 	}()
 
@@ -123,7 +153,7 @@ func (d *Detector) Run() error {
 
 		// trade is return even err is not nil
 		trade, err := d.parseTrade(pool, outMessage.AsExternalIn())
-		if chance, err := BuildBundleChance(pool, trade); err == nil {
+		if chance, err := d.BuildBundleChance(pool, trade); err == nil {
 			log.Info().Msgf("BundleChance %+v", chance)
 			bundleChanceCh <- chance
 		}

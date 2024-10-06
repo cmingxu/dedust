@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 
 	"github.com/cmingxu/dedust/model"
-	"github.com/cmingxu/dedust/utils"
 	mywallet "github.com/cmingxu/dedust/wallet"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -53,6 +52,7 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 		LatestReserve0: pool.Asset0Reserve,
 		LatestReserve1: pool.Asset1Reserve,
 		LatestPoolLt:   pool.Lt,
+		PoolUpdateAt:   pool.UpdatedAt,
 	}
 
 	internalMsg := tlb.InternalMessage{}
@@ -98,12 +98,17 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 	}
 
 FINISH:
-	trade.AmountIn = utils.CoinsToFloatTON(internalMsg.Amount)
+	trade.AmountIn = internalMsg.Amount.Nano().String()
 	return &trade, d.saveTrade(&trade)
 }
 
 func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.Trade) error {
-	opcode := msg.Body.BeginParse().MustPreloadUInt(32)
+	bodySlice := msg.Body.BeginParse()
+	if bodySlice.BitsLeft() < 32 {
+		return errors.New("not enough bits")
+	}
+
+	opcode := bodySlice.MustPreloadUInt(32)
 
 	switch opcode {
 	case DedustNativeSwap:
@@ -115,8 +120,8 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 
 		trade.TradeType = model.TradeTypeBuy
 		trade.SwapType = model.SwapTypeNative
-		trade.Amount = utils.CoinsToFloatTON(nativeSwap.Amount)
-		trade.Limit = nativeSwap.SwapStep.SwapStepParams.Limit.String()
+		trade.Amount = nativeSwap.Amount.Nano().String()
+		trade.Limit = nativeSwap.SwapStep.SwapStepParams.Limit.Nano().String()
 		trade.Recipient = nativeSwap.SwapParams.Recipient.String()
 		trade.Referrer = nativeSwap.SwapParams.Referrer.String()
 		if nativeSwap.SwapParams.FullfillPayload != nil {
@@ -134,7 +139,7 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		log.Debug().Msgf("(SELL) JettonTransfer: %+v", transfer)
 		trade.TradeType = model.TradeTypeSell
 		trade.SwapType = model.SwapTypeJetton
-		trade.Amount = utils.CoinsToFloatTON(transfer.Amount)
+		trade.Amount = transfer.Amount.Nano().String()
 		trade.TokenAmount = transfer.Amount.String()
 		swapStep := transfer.ForwardPayload.SwapStep
 		swapParams := transfer.ForwardPayload.SwapParams

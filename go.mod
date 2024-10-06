@@ -6,6 +6,7 @@ require (
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/gorilla/websocket v1.5.3
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/r3labs/sse v0.0.0-20210224172625-26fe804710bc
 	github.com/rs/zerolog v1.33.0
@@ -13,6 +14,8 @@ require (
 	github.com/tidwall/gjson v1.17.3
 	github.com/urfave/cli/v2 v2.27.4
 	github.com/xssnick/tonutils-go v1.10.2
+	golang.org/x/crypto v0.17.0
+	golang.org/x/net v0.10.0
 )
 
 require (
@@ -26,8 +29,6 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
-	golang.org/x/crypto v0.17.0 // indirect
-	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect

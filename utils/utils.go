@@ -13,6 +13,17 @@ import (
 	"github.com/xssnick/tonutils-go/tlb"
 )
 
+var (
+	client = &http.Client{
+		Transport: &http.Transport{
+			Proxy:           http.ProxyFromEnvironment,
+			MaxIdleConns:    200,
+			MaxConnsPerHost: 200,
+		},
+		Timeout: time.Second * 15,
+	}
+)
+
 func Request(ctx context.Context, method string, url string, body io.Reader) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
@@ -21,15 +32,6 @@ func Request(ctx context.Context, method string, url string, body io.Reader) ([]
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "dedust-cli/1.0")
-	client := &http.Client{
-		Transport: &http.Transport{
-			Proxy:           http.ProxyFromEnvironment,
-			MaxIdleConns:    100,
-			MaxConnsPerHost: 100,
-		},
-		Timeout: time.Second * 5,
-	}
-
 	resp, err := client.Do(req)
 	if err != nil {
 		return []byte{}, err

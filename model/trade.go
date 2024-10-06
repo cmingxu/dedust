@@ -17,9 +17,9 @@ swapType VARCHAR(16) NOT NULL,
 tradeType VARCHAR(16) NOT NULL,
 address VARCHAR(128) NOT NULL,
 poolAddr VARCHAR(128) NOT NULL,
-amountIn FLOAT NOT NULL,
+amountIn VARCHAR(128) NOT NULL,
 boc TEXT NOT NULL,
-amount FLOAT NOT NULL,
+amount VARCHAR(128) NOT NULL,
 tokenAmount VARCHAR(128) NOT NULL,
 limits TEXT NOT NULL,
 recipient VARCHAR(128) NOT NULL,
@@ -75,9 +75,9 @@ type Trade struct {
 	TradeType      TradeType  `json:"tradeType" db:"tradeType"`
 	Address        string     `json:"address" db:"address"`
 	PoolAddr       string     `json:"poolAddr" db:"poolAddr"`
-	AmountIn       float32    `json:"amountIn" db:"amountIn"`
+	AmountIn       string     `json:"amountIn" db:"amountIn"`
 	Boc            string     `json:"boc" db:"boc"`
-	Amount         float32    `json:"amount" db:"amount"`
+	Amount         string     `json:"amount" db:"amount"`
 	TokenAmount    string     `json:"tokenAmount" db:"tokenAmount"`
 	Limit          string     `json:"limit" db:"limits"`
 	Recipient      string     `json:"recipient" db:"recipient"`
@@ -87,7 +87,10 @@ type Trade struct {
 	LatestReserve0 string     `json:"latestReserve0" db:"lastestReserve0"`
 	LatestReserve1 string     `json:"latestReserve1" db:"lastestReserve1"`
 	LatestPoolLt   uint64     `json:"latestPool" db:"latestPoolLt"`
-	CreatedAt      *time.Time `json:"createdAt" db:"createdAt"`
+
+	CreatedAt *time.Time `json:"createdAt" db:"createdAt"`
+
+	PoolUpdateAt time.Time `json:"-" db:"-"`
 }
 
 func CreateTradeTableIfNotExists(db *sqlx.DB) error {

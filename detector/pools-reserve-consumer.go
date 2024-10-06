@@ -26,7 +26,7 @@ type DedustPayOutMessage struct {
 	TxHash    string `json:"tx_hash"`
 }
 
-func (d *Detector) PoolReserveUpdater(ctx context.Context) error {
+func (d *Detector) PoolReserveConsumer(ctx context.Context) error {
 	client := sse.NewClient(fmt.Sprintf(DedustPayoutFromPoolURL, TOKEN))
 
 	return client.Subscribe("messages", func(msg *sse.Event) {
@@ -80,6 +80,8 @@ func (d *Detector) updatePoolReserve(ctx context.Context, pool *model.Pool,
 			pool.Asset0Reserve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.0").String()
 			pool.Asset1Reserve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.1").String()
 			pool.Lt = lt
+
+			pool.UpdatedAt = time.Now()
 
 			if err := pool.UpdateReserves(d.db); err != nil {
 				log.Error().Err(err).Msg("failed to update pool")
