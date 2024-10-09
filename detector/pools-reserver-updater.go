@@ -43,7 +43,7 @@ func (d *Detector) PoolReserveUpdater(ctx context.Context) error {
 		pool, ok := d.poolMap[poolId]
 		if !ok {
 			d.poolLock.RUnlock()
-			updaterLogger.Warn().Msgf("pool %s not found", poolId)
+			updaterLogger.Warn().Msgf("PoolReserveUpdater pool %s not found", poolId)
 			continue
 		}
 		d.poolLock.RUnlock()

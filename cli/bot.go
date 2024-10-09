@@ -168,6 +168,7 @@ func botBundle(c *cli2.Context) error {
 
 	return bot.Bundle(
 		ctx,
+		connPool,
 		client,
 		pkFromSeed(botWalletSeeds),
 		poolAddr,

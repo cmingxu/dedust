@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cmingxu/dedust/model"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 )
@@ -121,7 +122,7 @@ func newHub() *Hub {
 	}
 }
 
-func (h *Hub) run(bundleChanceCh chan *BundleChance) {
+func (h *Hub) run(bundleChanceCh chan *model.BundleChance) {
 	for {
 		select {
 		case client := <-h.register:
@@ -149,7 +150,7 @@ func (h *Hub) run(bundleChanceCh chan *BundleChance) {
 	}
 }
 
-func (d *Detector) RunWSServer(ctx context.Context, bundleChanceCh chan *BundleChance) error {
+func (d *Detector) RunWSServer(ctx context.Context, bundleChanceCh chan *model.BundleChance) error {
 	hub := newHub()
 	go hub.run(bundleChanceCh)
 

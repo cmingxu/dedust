@@ -49,11 +49,6 @@ func (w *BotWallet) SendWaitTransaction(ctx context.Context, message *wallet.Mes
 }
 
 func (w *BotWallet) sendMany(ctx context.Context, messages []*wallet.Message, waitConfirmation ...bool) (tx *tlb.Transaction, block *ton.BlockIDExt, inMsgHash []byte, err error) {
-	block, err = w.api.CurrentMasterchainInfo(ctx)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get block: %w", err)
-	}
-
 	ext, err := w.BuildExternalMessageForMany(ctx, messages)
 	if err != nil {
 		return nil, nil, nil, err
@@ -67,6 +62,11 @@ func (w *BotWallet) sendMany(ctx context.Context, messages []*wallet.Message, wa
 	fmt.Println("Sent external message", inMsgHash)
 
 	if len(waitConfirmation) > 0 && waitConfirmation[0] {
+		block, err = w.api.CurrentMasterchainInfo(ctx)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to get block: %w", err)
+		}
+
 		fmt.Println("Waiting for confirmation...")
 		acc, err := w.api.WaitForBlock(block.SeqNo).GetAccount(ctx, block, w.addr)
 		if err != nil {

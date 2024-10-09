@@ -57,6 +57,7 @@ func (d *Detector) SubscribeTradeSignalFromTonAPIMemPool(ctx context.Context,
 			for i, accounts := range lo.Chunk(lo.Keys(d.poolMap), AccountsLenOfEachWebSocketRequest) {
 				go func() {
 				AGAIN:
+					log.Debug().Msgf("subscribe to mempool with %d accounts", len(accounts))
 					if err := d.subscribe(subCtx, i, accounts, mpResponseCh); err != nil {
 						log.Error().Err(err).Msg("failed to subscribe")
 						time.Sleep(1 * time.Second)
@@ -118,6 +119,7 @@ func (d *Detector) subscribe(ctx context.Context,
 			return true
 		})
 
+		log.Debug().Msgf("received mempool response %+s", mpResponse.String())
 		mpResponseCh <- &mpResponse
 	}
 }

@@ -289,10 +289,10 @@
     "liteservers": [
         {
             "ip": 822890778,
-            "port": 45118,
+         "port" : 53089,
             "id": {
                 "@type": "pub.ed25519",
-                "key": "lAz/RMVIyo1rP/9HQDDTiZvSmAfaAkZswopNL+9zw/k="
+                "key": "Jn4IxydAqAZTd3wKbafiD6CWmcNY17SF8YqadU6OZlE="
             }
         }
     ],

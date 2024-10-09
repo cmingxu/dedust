@@ -18,7 +18,7 @@ var (
 
 	host = cli2.StringFlag{
 		Name:  "host",
-		Value: "localhost",
+		Value: "127.0.0.1",
 	}
 
 	port = cli2.IntFlag{
@@ -38,7 +38,7 @@ var (
 
 	database = cli2.StringFlag{
 		Name:  "database",
-		Value: "mydb",
+		Value: "dedust",
 	}
 
 	tonConfig = cli2.StringFlag{
@@ -90,6 +90,24 @@ var (
 		Name:  "pre-update-reserve",
 		Value: false,
 		Usage: "whether update reserve before detect(with runGetMethod(get_reserves)",
+	}
+
+	wsEndpoint = cli2.StringFlag{
+		Name:  "ws-endpoint",
+		Value: "ws://170.187.148.100:8080/ws",
+		Usage: "Set the websocket endpoint",
+	}
+
+	printerOutPath = cli2.StringFlag{
+		Name:  "out-path",
+		Value: "out.csv",
+		Usage: "Set the output file path",
+	}
+
+	output = cli2.StringFlag{
+		Name:  "detect-output",
+		Value: "detect-out.txt",
+		Usage: "Set the output file path",
 	}
 )
 
@@ -156,12 +174,31 @@ func Run(args []string) int {
 					&database,
 					&tonConfig,
 					&preUpdateReserve,
+					&output,
 				},
 				Action: func(c *cli2.Context) error {
 					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
 						return err
 					}
 					return detect(c)
+				},
+			},
+
+			{
+				Name:        "mem-pool",
+				Description: "to check tonapi mempool",
+				Flags: []cli2.Flag{
+					&host,
+					&port,
+					&user,
+					&password,
+					&database,
+				},
+				Action: func(c *cli2.Context) error {
+					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
+						return err
+					}
+					return memPoolCheck(c)
 				},
 			},
 
@@ -276,6 +313,29 @@ func Run(args []string) int {
 
 					fmt.Println(wallet.NewSeed())
 					return nil
+				},
+			},
+			{
+				Name: "printer",
+				Flags: []cli2.Flag{
+					&tonConfig,
+					&botWalletSeed,
+					&wsEndpoint,
+					&printerOutPath,
+				},
+				Description: "to print money",
+				Action: func(c *cli2.Context) error {
+					return printer(c)
+				},
+			},
+			{
+				Name: "liteserver-ips",
+				Flags: []cli2.Flag{
+					&tonConfig,
+				},
+				Description: "to get list all ip of ton-config",
+				Action: func(c *cli2.Context) error {
+					return LiteserverIps(c)
 				},
 			},
 		},

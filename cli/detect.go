@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+
 	"github.com/cmingxu/dedust/detector"
 	"github.com/cmingxu/dedust/utils"
 
@@ -8,7 +10,14 @@ import (
 )
 
 func detect(c *cli2.Context) error {
-	d, err := detector.NewDetector(utils.ConstructDSN(c), c.String("ton-config"))
+	outFile, err := os.OpenFile(c.String("detect-output"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	d, err := detector.NewDetector(utils.ConstructDSN(c), c.String("ton-config"),
+		outFile)
 	if err != nil {
 		return err
 	}

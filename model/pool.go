@@ -57,8 +57,9 @@ const PoolCreationDDL = `
 `
 
 var (
-	ReseveLenForThousands   = 9 + 3
+	ReseveLenForTen         = 9 + 1
 	ReseveLenForHundrends   = 9 + 2
+	ReseveLenForThousands   = 9 + 3
 	ReseveLenFor10Thousands = 9 + 4
 )
 
@@ -171,7 +172,7 @@ func LoadPoolsFromJSON(data []byte) ([]*Pool, error) {
 func LoadPoolsFromDB(db *sqlx.DB, outstandingOnly bool) ([]*Pool, error) {
 	pools := make([]*Pool, 0)
 	if outstandingOnly {
-		statement := fmt.Sprintf("SELECT * FROM pools WHERE asset0Type = 'native' and LENGTH(asset0Reserve) >= %d AND asset1TokenWalletCode in (?)", ReseveLenForHundrends)
+		statement := fmt.Sprintf("SELECT * FROM pools WHERE asset0Type = 'native' and LENGTH(asset0Reserve) >= %d AND asset1TokenWalletCode in (?)", ReseveLenForTen)
 		query, args, err := sqlx.In(statement, ValidJettonWalletHash)
 		if err != nil {
 			return nil, err

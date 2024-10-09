@@ -2,6 +2,7 @@ package detector
 
 import (
 	"context"
+	"io"
 	"sync"
 	"time"
 
@@ -36,9 +37,11 @@ type Detector struct {
 
 	// cache chance
 	chanceCache *cache.Cache
+
+	out io.Writer
 }
 
-func NewDetector(dsn string, tonConfig string) (*Detector, error) {
+func NewDetector(dsn string, tonConfig string, out io.Writer) (*Detector, error) {
 	var err error
 	detector := &Detector{
 		db: nil,
@@ -49,6 +52,8 @@ func NewDetector(dsn string, tonConfig string) (*Detector, error) {
 
 		stopChan: make(chan struct{}),
 		stopOnce: sync.Once{},
+
+		out: out,
 	}
 
 	detector.db, err = sqlx.Connect("mysql", dsn)
@@ -76,7 +81,7 @@ func (d *Detector) Run(preUpdate bool) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	bundleChanceCh := make(chan *BundleChance, 10)
+	bundleChanceCh := make(chan *model.BundleChance, 10)
 	mpResponseCh := make(chan *MPResponse, 10)
 
 	poolsRenewedCh := make(chan struct{}, 1)
@@ -131,7 +136,7 @@ func (d *Detector) Run(preUpdate bool) error {
 		}
 
 		if pool == nil {
-			log.Warn().Msgf("pool %s not found", mpResponse.InvolvedAccounts)
+			log.Warn().Msgf("main pool %s not found", mpResponse.InvolvedAccounts)
 			continue
 		}
 
@@ -154,8 +159,10 @@ func (d *Detector) Run(preUpdate bool) error {
 		// trade is return even err is not nil
 		trade, err := d.parseTrade(pool, outMessage.AsExternalIn())
 		if chance, err := d.BuildBundleChance(pool, trade); err == nil {
-			log.Info().Msgf("BundleChance %+v", chance)
+			log.Debug().Msgf("BundleChance %+v", chance)
 			bundleChanceCh <- chance
+		} else {
+			log.Debug().Err(err).Msg("failed to build bundle chance")
 		}
 
 		if err != nil {

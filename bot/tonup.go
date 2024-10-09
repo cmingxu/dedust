@@ -12,7 +12,7 @@ import (
 
 var (
 	// guard from sending too much money
-	MaxTonupValue = tlb.MustFromTON("2")
+	MaxTonupValue = tlb.MustFromTON("200")
 )
 
 func Tonup(ctx context.Context,

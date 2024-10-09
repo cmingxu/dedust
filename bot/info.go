@@ -40,6 +40,10 @@ func InfoBot(ctx context.Context,
 	return nil
 }
 
+func BotAddress(publicKey ed25519.PublicKey) *address.Address {
+	return botAddress(publicKey)
+}
+
 func botAddress(publicKey ed25519.PublicKey) *address.Address {
 	stateInit := &tlb.StateInit{
 		Code: getCode(),
@@ -60,7 +64,6 @@ func getSeqno(ctx context.Context,
 	addr *address.Address) (uint64, error) {
 
 	stack, err := client.RunGetMethod(ctx, masterBlock, addr, "seqno")
-
 	if err != nil {
 		return 0, err
 	}

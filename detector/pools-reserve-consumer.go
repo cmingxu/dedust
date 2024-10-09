@@ -29,32 +29,35 @@ type DedustPayOutMessage struct {
 func (d *Detector) PoolReserveConsumer(ctx context.Context) error {
 	client := sse.NewClient(fmt.Sprintf(DedustPayoutFromPoolURL, TOKEN))
 
-	return client.Subscribe("messages", func(msg *sse.Event) {
-		if len(msg.Data) == 0 {
-			return
-		}
+	for {
+		err := client.Subscribe("messages", func(msg *sse.Event) {
+			if len(msg.Data) == 0 {
+				return
+			}
 
-		var payout DedustPayOutMessage
-		err := json.Unmarshal(msg.Data, &payout)
+			var payout DedustPayOutMessage
+			err := json.Unmarshal(msg.Data, &payout)
+			if err != nil {
+				log.Debug().Err(err).Msg("failed to unmarshal payout message")
+				return
+			}
+			log.Debug().Msgf("SSE pool reserve accountId: %s LT: %d", payout.AccountId, payout.Lt)
+
+			d.poolLock.RLock()
+			pool, ok := d.poolMap[payout.AccountId]
+			d.poolLock.RUnlock()
+
+			if ok {
+				go d.updatePoolReserve(ctx, pool, payout.AccountId, payout.Lt)
+			} else {
+				log.Warn().Msgf("ReserveConsumer - pool %s not found", payout.AccountId)
+			}
+		})
+
 		if err != nil {
-			log.Debug().Err(err).Msg("failed to unmarshal payout message")
-			return
+			log.Error().Err(err).Msg("failed to subscribe to dedust payout from pool")
 		}
-
-		//log.Debug().Msgf("tx-hash: %s", payout.TxHash)
-		//log.Debug().Msgf("accountId: %s (%s)", payout.AccountId, address.MustParseRawAddr(payout.AccountId).String())
-		//log.Debug().Msgf("lt: %d", payout.Lt)
-
-		d.poolLock.RLock()
-		defer d.poolLock.RUnlock()
-
-		pool, ok := d.poolMap[payout.AccountId]
-		if ok {
-			go d.updatePoolReserve(ctx, pool, payout.AccountId, payout.Lt)
-		} else {
-			log.Warn().Msgf("pool %s not found", payout.AccountId)
-		}
-	})
+	}
 }
 
 func (d *Detector) updatePoolReserve(ctx context.Context, pool *model.Pool,
@@ -76,7 +79,7 @@ func (d *Detector) updatePoolReserve(ctx context.Context, pool *model.Pool,
 		anton_last_lt := uint64(result.Get("results.0.last_tx_lt").Int())
 
 		if anton_last_lt >= lt {
-			log.Debug().Msgf("lastest anton account info found at LT %d after %d tries", lt, i)
+			log.Debug().Msgf("anton pool reserve found at LT %d after %d tries", lt, i)
 			pool.Asset0Reserve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.0").String()
 			pool.Asset1Reserve = result.Get("results.0.executed_get_methods.dedust_v2_pool.2.returns.1").String()
 			pool.Lt = lt
