@@ -109,6 +109,12 @@ var (
 		Value: "detect-out.txt",
 		Usage: "Set the output file path",
 	}
+
+	sendCnt = cli2.IntFlag{
+		Name:  "send-cnt",
+		Value: 2,
+		Usage: "Set the send count in printer",
+	}
 )
 
 func Run(args []string) int {
@@ -322,6 +328,7 @@ func Run(args []string) int {
 					&botWalletSeed,
 					&wsEndpoint,
 					&printerOutPath,
+					&sendCnt,
 				},
 				Description: "to print money",
 				Action: func(c *cli2.Context) error {

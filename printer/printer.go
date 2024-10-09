@@ -34,6 +34,8 @@ type Printer struct {
 
 	pool *liteclient.ConnectionPool
 	out  *os.File
+
+	sendCnt uint32
 }
 
 func NewPrinter(
@@ -44,6 +46,7 @@ func NewPrinter(
 	botprivateKey ed25519.PrivateKey,
 	wsEndpoint string,
 	outPath string,
+	sendCnt uint32,
 ) (*Printer, error) {
 	p := &Printer{
 		wsEndpoint:    wsEndpoint,
@@ -52,6 +55,7 @@ func NewPrinter(
 		pool:          pool,
 		client:        client,
 		ctx:           ctx,
+		sendCnt:       sendCnt,
 	}
 
 	var err error
@@ -144,7 +148,7 @@ func (p *Printer) Run() error {
 
 				i := 0
 				nodeCtx := context.WithValue(context.Background(), "foo", struct{}{})
-				for i < 5 {
+				for i < int(p.sendCnt) {
 					nodeCtx, err = p.pool.StickyContextNextNodeBalanced(nodeCtx)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to get next node")
@@ -228,9 +232,20 @@ func (p *Printer) getInfo() (uint64, tlb.Coins, error) {
 }
 
 func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
+	chanceAddr := address.MustParseAddr(chance.VictimAccountId)
+	if chanceAddr.String() == p.addr.String() {
+		return false
+	}
+
 	in := stringToBigInt(chance.BotIn)
+	// 如果余额不足
 	if p.balance.Nano().Cmp(in) < 0 {
 		return false
+	}
+
+	// 如果需要金额小于 5ton， 直接干, 不考虑收益率和资金效率
+	if in.Cmp(tlb.MustFromTON("10").Nano()) < 0 {
+		return true
 	}
 
 	// ROI bigger then 1%
@@ -238,7 +253,7 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 	roiBiggerThen1Percent := roi.Cmp(big.NewInt(100)) > 0
 
 	// profit more then 0.5 TON
-	profitWaterMark := tlb.MustFromTON("0.3")
+	profitWaterMark := tlb.MustFromTON("0.2")
 	profit := stringToBigInt(chance.Profit)
 	profitMoreThenWaterMark := profit.Cmp(profitWaterMark.Nano()) > 0
 

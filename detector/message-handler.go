@@ -6,6 +6,7 @@ import (
 
 	"github.com/cmingxu/dedust/model"
 	mywallet "github.com/cmingxu/dedust/wallet"
+	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/xssnick/tonutils-go/tlb"
@@ -67,6 +68,7 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 			return &trade, errors.Wrap(err, "failed to load InternalMessage")
 		}
 	} else {
+
 		var internalCell *cell.Cell
 		msgv3 := mywallet.V3Header{}
 		msgv4 := mywallet.V4R2Header{}
@@ -132,6 +134,8 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		}
 
 	case JettonTransfer:
+		d.sellingCache.Set(trade.PoolAddr, struct{}{}, cache.DefaultExpiration)
+
 		transfer, err := decodeJettonTransfer(msg.Body)
 		if err != nil {
 			return errors.Wrap(err, "failed to decode JettonTransfer")

@@ -35,8 +35,14 @@ type Detector struct {
 	connPool  *liteclient.ConnectionPool
 	apiCtx    context.Context
 
-	// cache chance
+	// cache chance 防止重复的交易产生的机会信号
 	chanceCache *cache.Cache
+
+	// selling cache 防止最新的 selling 对 reserve 产生影响
+	sellingCache *cache.Cache
+
+	// cooldown cache 防止在相同 pool 上的过于频繁的信号
+	cooldownCache *cache.Cache
 
 	out io.Writer
 }
@@ -70,6 +76,11 @@ func NewDetector(dsn string, tonConfig string, out io.Writer) (*Detector, error)
 
 	// a cache expire at 5s and purge at 10s
 	detector.chanceCache = cache.New(5*time.Second, 10*time.Second)
+
+	// 会将某个 pool 最近 30 的 sell 缓存起来
+	detector.sellingCache = cache.New(30*time.Second, 3*time.Second)
+
+	detector.cooldownCache = cache.New(90*time.Second, 10*time.Second)
 
 	return detector, nil
 }
@@ -160,6 +171,13 @@ func (d *Detector) Run(preUpdate bool) error {
 		trade, err := d.parseTrade(pool, outMessage.AsExternalIn())
 		if chance, err := d.BuildBundleChance(pool, trade); err == nil {
 			log.Debug().Msgf("BundleChance %+v", chance)
+
+			if _, found := d.cooldownCache.Get(pool.Address); found {
+				log.Debug().Msg("cooldown cache hit")
+				continue
+			}
+
+			d.cooldownCache.Set(pool.Address, struct{}{}, cache.DefaultExpiration)
 			bundleChanceCh <- chance
 		} else {
 			log.Debug().Err(err).Msg("failed to build bundle chance")

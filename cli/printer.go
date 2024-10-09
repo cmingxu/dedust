@@ -30,6 +30,7 @@ func printer(c *cli2.Context) error {
 		botprivateKey,
 		c.String("ws-endpoint"),
 		c.String("out-path"),
+		uint32(c.Uint("send-cnt")),
 	)
 	if err != nil {
 		return err

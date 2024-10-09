@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/cmingxu/dedust/model"
 	"github.com/patrickmn/go-cache"
@@ -31,6 +32,8 @@ var (
 	ErrLikelyABot             = errors.New("likely a bot")
 	ErrDuplicated             = errors.New("duplicated")
 	ErrNoPairAfterRangeFilter = errors.New("no pair after range filter")
+
+	ErrRecentSellDetect = errors.New("recent sell detect")
 )
 
 func (d *Detector) p(format string, args ...interface{}) {
@@ -49,6 +52,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 		LatestReserve0: pool.Asset0Reserve,
 		LatestReserve1: pool.Asset1Reserve,
 		LatestLt:       pool.Lt,
+		CreatedAt:      time.Now(),
 	}
 
 	d.p("=== %s ==== %s ====== \n", pool.Address, trade.Address)
@@ -76,6 +80,11 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	if trade.TradeType != model.TradeTypeBuy {
 		d.p("$ %s not BUY trade, skip \n", trade.Address)
 		return nil, ErrNotBuyTrade
+	}
+
+	if _, ok := d.sellingCache.Get(pool.Address); ok {
+		d.p("$ %s selling signal in 50s, skip \n", trade.Address)
+		return nil, ErrRecentSellDetect
 	}
 
 	tonAmount := stringToBigInt(trade.Amount)

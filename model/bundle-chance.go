@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 )
 
 type BundleChance struct {
@@ -25,6 +26,8 @@ type BundleChance struct {
 	BotTonOut       string `json:"bot_ton_out"`
 	Profit          string `json:"profit"`
 	Roi             string `json:"roi"`
+
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (b *BundleChance) Dump() string {
@@ -38,10 +41,10 @@ func (b *BundleChance) Dump() string {
 }
 
 func (b *BundleChance) CSV(w io.Writer) error {
-	_, err := fmt.Fprintf(w, "%s,%s,%s,%s,%s,%d,%s,%s,%s,%d,%s,%s,%s,%s,%s,%s\n",
+	_, err := fmt.Fprintf(w, "%s,%s,%s,%s,%s,%d,%s,%s,%s,%d,%s,%s,%s,%s,%s,%s, %s\n",
 		b.VictimTx, b.VictimAccountId, b.PoolAddress, b.VictimAmount, b.VictimLimit, b.VictimLimitRatio,
 		b.LatestReserve0, b.LatestReserve1, b.LatestLt,
-		b.VictimJettonOut, b.BotIn, b.BotJettonOut, b.BotTonOut, b.Profit, b.Roi,
+		b.VictimJettonOut, b.BotIn, b.BotJettonOut, b.BotTonOut, b.Profit, b.Roi, b.CreatedAt.Format(time.RFC3339),
 	)
 	return err
 }
