@@ -3,6 +3,7 @@ package detector
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"math/big"
 
 	"github.com/cmingxu/dedust/model"
 	mywallet "github.com/cmingxu/dedust/wallet"
@@ -131,6 +132,13 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		}
 		if nativeSwap.SwapParams.RejectPayload != nil {
 			trade.RejectBOC = hex.EncodeToString(nativeSwap.SwapParams.RejectPayload.ToBOC())
+		}
+
+		// 这说明这个 trade 是可以多步交易的，也是一个夹子， 这样的交易是有风险的
+		if nativeSwap.SwapStep.SwapStepParams.Next != nil &&
+			nativeSwap.SwapStep.SwapStepParams.Next.SwapStepParams != nil &&
+			nativeSwap.SwapStep.SwapStepParams.Next.SwapStepParams.Limit.Nano().Cmp(big.NewInt(0)) > 0 {
+			trade.HasNextStep = true
 		}
 
 	case JettonTransfer:

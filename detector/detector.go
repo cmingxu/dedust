@@ -75,10 +75,10 @@ func NewDetector(dsn string, tonConfig string, out io.Writer) (*Detector, error)
 	detector.apiClient = utils.GetAPIClient(detector.connPool)
 
 	// a cache expire at 5s and purge at 10s
-	detector.chanceCache = cache.New(5*time.Second, 10*time.Second)
+	detector.chanceCache = cache.New(5*time.Second, 1*time.Second)
 
 	// 会将某个 pool 最近 30 的 sell 缓存起来
-	detector.sellingCache = cache.New(30*time.Second, 3*time.Second)
+	detector.sellingCache = cache.New(50*time.Second, 3*time.Second)
 
 	detector.cooldownCache = cache.New(90*time.Second, 10*time.Second)
 

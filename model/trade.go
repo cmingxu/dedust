@@ -91,6 +91,7 @@ type Trade struct {
 	CreatedAt *time.Time `json:"createdAt" db:"createdAt"`
 
 	PoolUpdateAt time.Time `json:"-" db:"-"`
+	HasNextStep  bool      `json:"-" db:"-"`
 }
 
 func CreateTradeTableIfNotExists(db *sqlx.DB) error {

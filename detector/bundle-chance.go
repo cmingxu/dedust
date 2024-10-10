@@ -34,6 +34,8 @@ var (
 	ErrNoPairAfterRangeFilter = errors.New("no pair after range filter")
 
 	ErrRecentSellDetect = errors.New("recent sell detect")
+
+	ErrRiskAsTradeIsBundle = errors.New("risk as trade is bundle")
 )
 
 func (d *Detector) p(format string, args ...interface{}) {
@@ -56,12 +58,18 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	}
 
 	d.p("=== %s ==== %s ====== \n", pool.Address, trade.Address)
+	d.p("- now is: %s \n", time.Now().Format(time.RFC3339Nano))
 	d.p("- VictimTx %s\n", trade.Hash)
 	d.p("- VictimAccountId %s\n", trade.Address)
 	d.p("- VictimAmount %s\n", trade.Amount)
 	d.p("- VictimLimit %s\n", trade.Limit)
 	d.p("- LatestReserve0 %s\n", pool.Asset0Reserve)
 	d.p("- LatestReserve1 %s\n", pool.Asset1Reserve)
+
+	if trade.HasNextStep {
+		d.p("$ %s is bundle, skip\n", trade.Address)
+		return nil, ErrRiskAsTradeIsBundle
+	}
 
 	h := hashOfChance(pool.Address, trade.Amount, trade.Limit)
 	d.p("- Hash %s\n", h)
