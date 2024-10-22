@@ -1,22 +1,39 @@
 package printer
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math/big"
+	"net/http"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/cmingxu/dedust/bot"
 	"github.com/cmingxu/dedust/model"
+	"github.com/cmingxu/dedust/utils"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog/log"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
+	"github.com/xssnick/tonutils-go/ton/wallet"
+)
+
+const TOKEN = "AEETAB4AU6BMELIAAAADMMZHBQOIVYFMRL7QZ77HCXATNHS5PF6CIJQJNAQRLC4OG73V2VQ"
+
+var (
+	DCM_ADDR = address.MustParseAddr("UQCwSxqefElovEPlpZ8bIEL_KXqWuqoOhwb65uYjos9bCDcM")
+)
+
+const (
+	SendModeNormal   = int64(0)
+	SendModeObsolate = int64(5)
 )
 
 type Printer struct {
@@ -36,6 +53,14 @@ type Printer struct {
 	out  *os.File
 
 	sendCnt uint32
+
+	useTonAPI    bool
+	useTonCenter bool
+	useANDL      bool
+
+	upperlimit *big.Int
+
+	httpClt *http.Client
 }
 
 func NewPrinter(
@@ -47,6 +72,10 @@ func NewPrinter(
 	wsEndpoint string,
 	outPath string,
 	sendCnt uint32,
+	useTonAPI bool,
+	useTonCenter bool,
+	useANDL bool,
+	limit string,
 ) (*Printer, error) {
 	p := &Printer{
 		wsEndpoint:    wsEndpoint,
@@ -56,9 +85,23 @@ func NewPrinter(
 		client:        client,
 		ctx:           ctx,
 		sendCnt:       sendCnt,
+		useTonAPI:     useTonAPI,
+		useTonCenter:  useTonCenter,
+		useANDL:       useANDL,
 	}
 
 	var err error
+	l, err := tlb.FromTON(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	p.upperlimit = l.Nano()
+
+	p.httpClt = &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
 	p.out, err = os.OpenFile(outPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
@@ -112,10 +155,8 @@ func (p *Printer) Run() error {
 	for {
 		select {
 		case chance := <-chanceCh:
-			log.Debug().Msgf("got chance info %+s", chance.Dump())
+			log.Debug().Msgf("chance:  %+s", chance.ShortDump())
 			if p.MeetRequirement(&chance) {
-				log.Debug().Msg("meet requirement")
-
 				poolAddr := address.MustParseAddr(chance.PoolAddress)
 				botInAmount := tlb.MustFromNano(stringToBigInt(chance.BotIn), 9)
 				nextLimit := botInAmount
@@ -125,8 +166,12 @@ func (p *Printer) Run() error {
 				limitBN9995 := new(big.Int).Div(new(big.Int).Mul(limitBN, big.NewInt(9995)), big.NewInt(10000))
 				limit := tlb.MustFromNano(limitBN9995, 9)
 
-				log.Debug().Msgf("pool %s, botIn %s, limit %s, nextLimit %s",
-					poolAddr.String(), botInAmount.String(), limit.String(), nextLimit.String())
+				// 如果 25s 内没有购买成功，放弃， 当前网络比较慢
+				deadline := time.Now().Add(25 * time.Second)
+
+				log.Debug().Msgf("Let's BUN it [pool %s, botIn %s, limit %s, nextLimit %s, deadline: %s]",
+					poolAddr.String(), botInAmount.String(), limit.String(), nextLimit.String(),
+					deadline.Format(time.RFC3339Nano))
 
 				nbot := bot.NewBotWallet(p.ctx, p.client, p.addr, p.botPrivateKey, p.seqno)
 				msg := nbot.BuildBundle(
@@ -134,53 +179,44 @@ func (p *Printer) Run() error {
 					botInAmount.Nano(),
 					limit.Nano(),
 					nextLimit.Nano(),
-				)
+					uint64(deadline.Unix()))
 
-				log.Debug().Msgf("built bundle %+v", msg)
-
-				ctx := context.Background()
-				err = nbot.Send(ctx, msg, false)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to send bundle")
-				}
-
-				ctxSlices := make([]context.Context, 0)
-
-				i := 0
-				nodeCtx := context.WithValue(context.Background(), "foo", struct{}{})
-				for i < int(p.sendCnt) {
-					nodeCtx, err = p.pool.StickyContextNextNodeBalanced(nodeCtx)
-					if err != nil {
-						log.Error().Err(err).Msg("failed to get next node")
-						break
-					}
-					nodeId, _ := nodeCtx.Value("_ton_node_sticky").(uint32)
-					ctxSlices = append(ctxSlices,
-						context.WithValue(context.Background(), "_ton_node_sticky", nodeId))
-					i++
-				}
-
-				var wg sync.WaitGroup
-				wg.Add(len(ctxSlices))
-				for i, c := range ctxSlices {
-					go func(i int, c context.Context) {
-						defer wg.Done()
-
-						nid, _ := c.Value("_ton_node_sticky").(uint32)
-						err = nbot.Send(c, msg, false)
-						log.Debug().Msgf("sent bundle to node %d[%d]", nid, i)
-						if err != nil {
-							log.Error().Err(err).Msg("failed to send bundle")
+				var err error
+				if p.useANDL {
+					go func() {
+						log.Debug().Msgf("sending with ANDL %d", p.sendCnt)
+						if err = p.SendWithANDL(&chance, nbot, msg); err != nil {
+							log.Error().Err(err).Msg("failed to send")
 						}
-					}(i, c)
+					}()
 				}
 
-				wg.Wait()
+				if p.useTonAPI {
+					go func() {
+						err := utils.TimeitReturnError("sending with TONAPI", func() error {
+							return p.SendWithTONAPI(&chance, nbot, msg)
+						})
 
-				p.working = true
+						if err != nil {
+							log.Error().Err(err).Msg("failed to send")
+						}
+					}()
+				}
 
-				if err := chance.CSV(p.out); err != nil {
-					log.Error().Err(err).Msg("failed to write to file")
+				if p.useTonCenter {
+					go func() {
+						err := utils.TimeitReturnError("sending with TONCENTER", func() error {
+							return p.SendWithTONCenter(&chance, nbot, msg)
+						})
+
+						if err != nil {
+							log.Error().Err(err).Msg("failed to send")
+						}
+					}()
+				}
+
+				if err != nil {
+					log.Error().Err(err).Msg("failed to send")
 				}
 
 				timer.Reset(60 * time.Second)
@@ -193,7 +229,9 @@ func (p *Printer) Run() error {
 				p.working = false
 			}
 		case <-ticker.C:
-			log.Debug().Msgf("dida dida, seqno: %d, working: %t", p.seqno, p.working)
+			fmt.Printf("[+] T: %s B: %s, S: %d, W: %t\n",
+				time.Now().Format(time.Kitchen),
+				p.balance.String(), p.seqno, p.working)
 			go func() {
 				no, balance, err := p.getInfo()
 				if err != nil {
@@ -234,34 +272,212 @@ func (p *Printer) getInfo() (uint64, tlb.Coins, error) {
 func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 	chanceAddr := address.MustParseAddr(chance.VictimAccountId)
 	if chanceAddr.String() == p.addr.String() {
+		log.Debug().Msg("[-] SKIP, victim is me")
 		return false
 	}
 
 	in := stringToBigInt(chance.BotIn)
 	// 如果余额不足
 	if p.balance.Nano().Cmp(in) < 0 {
+		log.Debug().Msg("[-] SKIP, balance not enough")
 		return false
 	}
 
-	// 如果需要金额小于 5ton， 直接干, 不考虑收益率和资金效率
-	if in.Cmp(tlb.MustFromTON("10").Nano()) < 0 {
+	if in.Cmp(p.upperlimit) > 0 {
+		log.Debug().Msg("[-] SKIP, in amount too big")
+		return false
+	}
+
+	// 如果期望收益大于 1TON，直接上
+	profit := stringToBigInt(chance.Profit)
+	if profit.Cmp(tlb.MustFromTON("0.12").Nano()) < 0 {
+		return false
+	}
+
+	if profit.Cmp(tlb.MustFromTON("1").Nano()) > 0 {
 		return true
 	}
 
-	// ROI bigger then 1%
-	roi := stringToBigInt(chance.Roi)
-	roiBiggerThen1Percent := roi.Cmp(big.NewInt(100)) > 0
+	if st(in, "20") && bt(profit, "0.25") {
+		return true
+	}
 
-	// profit more then 0.5 TON
-	profitWaterMark := tlb.MustFromTON("0.2")
-	profit := stringToBigInt(chance.Profit)
-	profitMoreThenWaterMark := profit.Cmp(profitWaterMark.Nano()) > 0
+	if st(in, "50") && bt(profit, "0.35") {
+		return true
+	}
 
-	return roiBiggerThen1Percent || profitMoreThenWaterMark
+	if st(in, "100") && bt(profit, "0.6") {
+		return true
+	}
+
+	if st(in, "150") && bt(profit, "1") {
+		return true
+	}
+
+	return false
+}
+
+func bt(a *big.Int, b string) bool {
+	bi := tlb.MustFromTON(b)
+	return a.Cmp(bi.Nano()) > 0
+}
+
+func st(a *big.Int, b string) bool {
+	bi := tlb.MustFromTON(b)
+	return a.Cmp(bi.Nano()) < 0
 }
 
 func stringToBigInt(s string) *big.Int {
 	i := new(big.Int)
 	i.SetString(s, 10)
 	return i
+}
+
+func (p *Printer) SendWithANDL(
+	chance *model.BundleChance,
+	nbot *bot.BotWallet,
+	msg *wallet.Message,
+) error {
+	var err error
+	// t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/b")
+	// ctx := context.Background()
+	// err = nbot.SendMany(ctx, []*wallet.Message{msg, t}, false)
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("failed to send bundle")
+	// }
+	//
+	ctxSlices := make([]context.Context, 0)
+
+	i := 0
+	nodeCtx := context.WithValue(context.Background(), "foo", struct{}{})
+	for i < int(p.sendCnt) {
+		nodeCtx, err = p.pool.StickyContextNextNodeBalanced(nodeCtx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get next node")
+			break
+		}
+		nodeId, _ := nodeCtx.Value("_ton_node_sticky").(uint32)
+		ctxSlices = append(ctxSlices,
+			context.WithValue(context.Background(), "_ton_node_sticky", nodeId))
+		i++
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(ctxSlices))
+	for i, c := range ctxSlices {
+		go func(i int, c context.Context) {
+			defer wg.Done()
+
+			nid, _ := c.Value("_ton_node_sticky").(uint32)
+			err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
+				//t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.0001"), fmt.Sprintf("a/%d", nid))
+				return nbot.SendMany(c, SendModeObsolate, []*wallet.Message{msg}, false)
+			})
+
+			if err != nil {
+				log.Error().Err(err).Msgf("failed to send bundle %d", i)
+			}
+		}(i, c)
+	}
+	wg.Wait()
+	p.working = true
+
+	if err := chance.CSV(p.out); err != nil {
+		log.Error().Err(err).Msg("failed to write to file")
+	}
+
+	return nil
+}
+
+func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
+	nbot *bot.BotWallet,
+	msg *wallet.Message) error {
+	c := context.Background()
+
+	// t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/a")
+	externalMsg, err := nbot.BuildExternalMessageForMany(c,
+		SendModeObsolate,
+		[]*wallet.Message{msg})
+	if err != nil {
+		return err
+	}
+
+	cell, err := tlb.ToCell(externalMsg)
+	if err != nil {
+		return err
+	}
+
+	var body struct {
+		Body string `json:"body"`
+	}
+	body.Body = base64.StdEncoding.EncodeToString(cell.ToBOC())
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(body); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "https://tonapi.io/v2/liteserver/send_message", buf)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", TOKEN))
+	resp, err := p.httpClt.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	log.Debug().Msgf("tonapi resp status: %d", resp.StatusCode)
+	return nil
+}
+func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
+	nbot *bot.BotWallet,
+	msg *wallet.Message) error {
+	c := context.Background()
+
+	//t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/c")
+	externalMsg, err := nbot.BuildExternalMessageForMany(c,
+		SendModeObsolate,
+		[]*wallet.Message{msg})
+	if err != nil {
+		return err
+	}
+
+	cell, err := tlb.ToCell(externalMsg)
+	if err != nil {
+		return err
+	}
+
+	var body struct {
+		Body string `json:"boc"`
+	}
+	body.Body = base64.StdEncoding.EncodeToString(cell.ToBOC())
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(body); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "https://toncenter.com/api/v2/sendBoc", buf)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := p.httpClt.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	log.Debug().Msgf("toncenter resp status: %d", resp.StatusCode)
+
+	return nil
+}
+
+func (p *Printer) BuildAuxTransfer(bw *bot.BotWallet, amount tlb.Coins, comment string) (*wallet.Message, error) {
+	return bw.BuildTransfer(DCM_ADDR, amount, true, comment)
 }

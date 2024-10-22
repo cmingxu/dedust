@@ -23,8 +23,9 @@ var (
 	// dedust native vault address
 	DedustNativeVault = address.MustParseAddr("EQDa4VOnTYlLvDJ0gZjNYm5PXfSmmtL6Vs6A_CZEtXCNICq_")
 
-	DedustNativeSwapMaigc = uint64(0xea06185d)
-	DedustJettonSwapMagic = uint64(0xe3a0d482)
+	DedustNativeSwapMagic       = uint64(0xea06185d)
+	CustomDedustNativeSwapMagic = uint64(0xca06185f)
+	DedustJettonSwapMagic       = uint64(0xe3a0d482)
 )
 
 var (
@@ -75,7 +76,7 @@ func (w *BotWallet) transfer(ctx context.Context, to *address.Address, amount tl
 	if err != nil {
 		return err
 	}
-	return w.Send(ctx, transfer, waitConfirmation...)
+	return w.Send(ctx, 0, transfer, waitConfirmation...)
 }
 
 func (w *BotWallet) BuildTransfer(to *address.Address, amount tlb.Coins, bounce bool, comment string) (_ *wallet.Message, err error) {
@@ -152,36 +153,38 @@ func (w *BotWallet) BuildDedustSell(
 
 // https://github.com/dedust-io/sdk/blob/main/src/contracts/dex/vault/VaultNative.ts
 func (w *BotWallet) BuildBundle(poolAddr *address.Address,
-	amount *big.Int, limit *big.Int, nextLimit *big.Int) (_ *wallet.Message) {
+	amount *big.Int, limit *big.Int, nextLimit *big.Int,
+	deadline uint64,
+) (_ *wallet.Message) {
 
 	passingPoolAddr := cell.BeginCell().
 		MustStoreAddr(poolAddr).
 		EndCell()
 
 	swapParamsRef := cell.BeginCell().
-		MustStoreUInt(0, 32).               // deadline
-		MustStoreAddr(w.addr).              // receipent address
-		MustStoreAddr(nil).                 // referer address
-		MustStoreMaybeRef(passingPoolAddr). // fulfillPayload
-		MustStoreMaybeRef(passingPoolAddr). // rejectPayload
+		MustStoreUInt(uint64(deadline), 32). // deadline
+		MustStoreAddr(w.addr).               // receipent address
+		MustStoreAddr(nil).                  // referer address
+		MustStoreMaybeRef(passingPoolAddr).  // fulfillPayload
+		MustStoreMaybeRef(passingPoolAddr).  // rejectPayload
 		EndCell()
 
 		// sell imeidiately
-	next := cell.BeginCell().
-		MustStoreAddr(poolAddr). // next pool addr
-		MustStoreUInt(0, 1).
-		MustStoreCoins(nextLimit.Uint64()). // next limit
-		MustStoreMaybeRef(nil).
-		EndCell()
+	//next := cell.BeginCell().EndCell()
+	// MustStoreAddr(poolAddr). // next pool addr
+	// MustStoreUInt(0, 1).
+	// MustStoreCoins(nextLimit.Uint64()). // next limit
+	// MustStoreMaybeRef(nil).
+	// EndCell()
 
 	body := cell.BeginCell().
-		MustStoreUInt(DedustNativeSwapMaigc, 32). // magic
-		MustStoreUInt(0, 64).                     // queryId
-		MustStoreCoins(amount.Uint64()).          // amount
-		MustStoreAddr(poolAddr).                  // poolAddr
-		MustStoreUInt(0, 1).                      // Kind
-		MustStoreCoins(limit.Uint64()).           // Fee
-		MustStoreMaybeRef(next).
+		MustStoreUInt(CustomDedustNativeSwapMagic, 32). // magic
+		MustStoreUInt(0, 64).                           // queryId
+		MustStoreCoins(amount.Uint64()).                // amount
+		MustStoreAddr(poolAddr).                        // poolAddr
+		MustStoreUInt(0, 1).                            // Kind
+		MustStoreCoins(limit.Uint64()).                 // Fee
+		MustStoreMaybeRef(nil).
 		MustStoreRef(swapParamsRef).
 		EndCell()
 

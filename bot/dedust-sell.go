@@ -46,7 +46,7 @@ func DedustSell(
 
 	fmt.Println("Dedust sell message:", msg)
 
-	return botWallet.Send(ctx, msg, true)
+	return botWallet.Send(ctx, 0, msg, true)
 }
 
 func botJettonWalletAddrAndAmount(ctx context.Context,

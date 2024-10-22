@@ -3,7 +3,7 @@ package detector
 import (
 	"encoding/base64"
 	"encoding/hex"
-	"math/big"
+	"time"
 
 	"github.com/cmingxu/dedust/model"
 	mywallet "github.com/cmingxu/dedust/wallet"
@@ -43,6 +43,14 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 
 	log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
 	// log.Debug().Msgf("%s", msg.Body.Dump())
+	log.Debug().Msgf("External Body RefNum: %d\n", msg.Body.RefsNum())
+
+	d.p("=========================================\n")
+	d.p("=======         BEGIN        ============\n")
+	d.p("=========================================\n")
+	d.p("ExternalIn Dst: %s\n", msg.DestAddr().String())
+	d.p("External Cell: %s\n", msg.Body.Dump())
+	d.p("External Body RefNum: %d\n", msg.Body.RefsNum())
 
 	slice := msg.Body.BeginParse()
 	magic := slice.MustPreloadUInt(32)
@@ -55,6 +63,11 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 		LatestReserve1: pool.Asset1Reserve,
 		LatestPoolLt:   pool.Lt,
 		PoolUpdateAt:   pool.UpdatedAt,
+		FirstSeen:      time.Now(),
+	}
+
+	if msg.Body.RefsNum() != 1 {
+		trade.HasMultipleActions = true
 	}
 
 	internalMsg := tlb.InternalMessage{}
@@ -68,8 +81,9 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 			msg.Action.OutMsg.BeginParse()); err != nil {
 			return &trade, errors.Wrap(err, "failed to load InternalMessage")
 		}
-	} else {
+		d.p("V5 Internal Cell: %s\n", msg.Action.OutMsg.Dump())
 
+	} else {
 		var internalCell *cell.Cell
 		msgv3 := mywallet.V3Header{}
 		msgv4 := mywallet.V4R2Header{}
@@ -89,6 +103,8 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 		goto FINISH
 
 	CORRECT:
+		d.p("Trade WalletType %s\n", trade.WalletType)
+		d.p("V3/V4 branch Internal Cell: %s\n", internalCell.Dump())
 		if err := tlb.LoadFromCell(&internalMsg, internalCell.BeginParse()); err != nil {
 			log.Debug().Err(err).Msg("failed to load InternalMessage")
 			trade.WalletType = model.WalletTypeBot
@@ -101,6 +117,7 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 	}
 
 FINISH:
+	d.p("Finish Internal Message: %+v\n", internalMsg)
 	trade.AmountIn = internalMsg.Amount.Nano().String()
 	return &trade, d.saveTrade(&trade)
 }
@@ -136,8 +153,7 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 
 		// 这说明这个 trade 是可以多步交易的，也是一个夹子， 这样的交易是有风险的
 		if nativeSwap.SwapStep.SwapStepParams.Next != nil &&
-			nativeSwap.SwapStep.SwapStepParams.Next.SwapStepParams != nil &&
-			nativeSwap.SwapStep.SwapStepParams.Next.SwapStepParams.Limit.Nano().Cmp(big.NewInt(0)) > 0 {
+			nativeSwap.SwapStep.SwapStepParams.Next.SwapStepParams != nil {
 			trade.HasNextStep = true
 		}
 
@@ -165,6 +181,12 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		if swapParams.RejectPayload != nil {
 			trade.RejectBOC = hex.EncodeToString(swapParams.RejectPayload.ToBOC())
 		}
+	case JettonBurn:
+		d.sellingCache.Set(trade.PoolAddr, struct{}{}, cache.DefaultExpiration)
+		// https://tonviewer.com/transaction/d5cb3a50271a86222fbbd269c64a65e97d25fea16aaa43ce9ea37a08e7e2d7b0
+		log.Debug().Msg("(LP Burn)")
+		d.p("LP Burn: %s\n", msg.Body.Dump())
+
 	default:
 		return errors.New("unknown opcode")
 	}

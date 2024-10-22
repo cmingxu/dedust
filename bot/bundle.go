@@ -25,10 +25,11 @@ func Bundle(
 
 	fmt.Println("Bot address:", botAddr.String())
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 277)
+	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 0)
 
 	nextLimit := tonIn
-	msg := botWallet.BuildBundle(poolAddr, tonIn.Nano(), limit.Nano(), nextLimit.Nano())
+	msg := botWallet.BuildBundle(poolAddr, tonIn.Nano(), limit.Nano(),
+		nextLimit.Nano(), 0)
 
 	// botWallet.Send(ctx, msg, false)
 
@@ -41,7 +42,7 @@ func Bundle(
 			break
 		}
 
-		err = botWallet.Send(nodeCtx, msg, false)
+		err = botWallet.Send(nodeCtx, 5, msg, false)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to send bundle")
 		}

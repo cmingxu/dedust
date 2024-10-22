@@ -48,6 +48,16 @@ func syncPool(c *cli2.Context) error {
 		return err
 	}
 
+	connPool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
+	if err != nil {
+		return err
+	}
+	client := utils.GetAPIClient(connPool)
+	masterBlock, err := client.GetMasterchainInfo(ctx)
+	if err != nil {
+		return err
+	}
+
 	for i, pool := range pools {
 		ok, err := pool.ExistsInDB(db)
 		if err != nil {
@@ -60,7 +70,7 @@ func syncPool(c *cli2.Context) error {
 			continue
 		}
 
-		err = pool.FetchAssetCode()
+		err = pool.FetchAssetCode(ctx, connPool, masterBlock)
 		if err != nil {
 			log.Err(err).Msg("failed to fetch asset code")
 			continue

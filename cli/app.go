@@ -6,6 +6,7 @@ import (
 
 	"github.com/cmingxu/dedust/utils"
 	cli2 "github.com/urfave/cli/v2"
+	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/ton/wallet"
 )
 
@@ -114,6 +115,30 @@ var (
 		Name:  "send-cnt",
 		Value: 2,
 		Usage: "Set the send count in printer",
+	}
+
+	useTonAPI = cli2.BoolFlag{
+		Name:  "use-tonapi",
+		Value: false,
+		Usage: "Set whether use ton api",
+	}
+
+	useTonCenter = cli2.BoolFlag{
+		Name:  "use-toncenter",
+		Value: false,
+		Usage: "Set whether use ton center",
+	}
+
+	useANDL = cli2.BoolFlag{
+		Name:  "use-andl",
+		Value: true,
+		Usage: "Set whether use andl",
+	}
+
+	limit = cli2.StringFlag{
+		Name:  "limit",
+		Value: "50",
+		Usage: "Set the limit amount of TON to bundle",
 	}
 )
 
@@ -322,6 +347,25 @@ func Run(args []string) int {
 				},
 			},
 			{
+				Name:        "new-seed-same-shard",
+				Description: "to generate a new seed for a wallet",
+				Flags: []cli2.Flag{
+					&destAddr,
+				},
+				Action: func(c *cli2.Context) error {
+					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
+						return err
+					}
+
+					a, err := address.ParseAddr(c.String("dest-addr"))
+					if err != nil {
+						return err
+					}
+
+					return NewSeedSameShardWith(a)
+				},
+			},
+			{
 				Name: "printer",
 				Flags: []cli2.Flag{
 					&tonConfig,
@@ -329,6 +373,10 @@ func Run(args []string) int {
 					&wsEndpoint,
 					&printerOutPath,
 					&sendCnt,
+					&useTonAPI,
+					&useTonCenter,
+					&useANDL,
+					&limit,
 				},
 				Description: "to print money",
 				Action: func(c *cli2.Context) error {
@@ -343,6 +391,19 @@ func Run(args []string) int {
 				Description: "to get list all ip of ton-config",
 				Action: func(c *cli2.Context) error {
 					return LiteserverIps(c)
+				},
+			},
+			{
+				Name: "dummy-transfer",
+				Flags: []cli2.Flag{
+					&tonConfig,
+					&botWalletSeed,
+					&destAddr,
+					&amount,
+				},
+				Description: "generate base64 send message(external)",
+				Action: func(c *cli2.Context) error {
+					return buildTransferMessage(c)
 				},
 			},
 		},

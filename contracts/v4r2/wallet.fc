@@ -221,6 +221,33 @@ int forward_ton_amount() asm "20000000 PUSHINT"; ;; 0.02 TON
     send_raw_message(msg.end_cell(), 3);
   }
 
+  if (op == 5) {
+    while (cs.slice_refs()) {
+      var mode = cs~load_uint(8);
+      cell si = cs~load_ref();  ;; swap internal message
+      slice ss = si.begin_parse(); ;; swap slice
+
+      int head = ss~load_uint(6);
+      slice vault = ss~load_msg_addr();
+      int amount = ss~load_grams();
+      int flags = ss~load_uint(1 + 4 + 4 + 64 + 32 + 1 + 1);
+
+
+      int remain_bits = ss.slice_bits();
+      int magic = ss~load_uint(32);
+      if(magic == 0xca06185f) {
+      builder msg = begin_cell()
+      .store_uint(head, 6)
+      .store_slice(vault)
+      .store_grams(amount)
+      .store_uint(flags, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+      .store_uint(0xea06185d, 32)
+      .store_slice(ss);
+        send_raw_message(msg.end_cell(), mode);
+      }
+    }
+  }
+
   set_data(begin_cell()
     .store_uint(stored_seqno + 1, 32)
     .store_uint(stored_subwallet, 32)

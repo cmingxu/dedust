@@ -2,6 +2,7 @@ package model
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/tidwall/gjson"
 	"github.com/xssnick/tonutils-go/address"
+	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
 )
@@ -187,36 +189,63 @@ func LoadPoolsFromDB(db *sqlx.DB, outstandingOnly bool) ([]*Pool, error) {
 	return pools, err
 }
 
-func (p *Pool) FetchAssetCode() error {
-	var err error
+func (p *Pool) FetchAssetCode(ctx context.Context,
+	conn *liteclient.ConnectionPool,
+	masterBlock *ton.BlockIDExt,
+) error {
 
-	if len(p.Asset0Address) != 0 {
-		p.Asset0Code, err = fetchJettonMasterCodeHash(p.Asset0Address)
+	client := utils.GetAPIClient(conn)
+
+	addr0, err := address.ParseAddr(p.Asset0Address)
+	if err == nil {
+		acc, err := client.GetAccount(ctx, masterBlock, addr0)
 		if err != nil {
 			return err
 		}
-	}
 
-	if len(p.Asset1Address) != 0 {
-		p.Asset1Code, err = fetchJettonMasterCodeHash(p.Asset1Address)
+		if acc.Code == nil {
+			return fmt.Errorf("asset0 code is nil")
+		}
+
+		p.Asset0Code = base64.StdEncoding.EncodeToString(acc.Code.Hash())
+		stack, err := client.RunGetMethod(ctx, masterBlock, address.MustParseAddr(p.Asset0Address), "get_jetton_data", nil)
 		if err != nil {
 			return err
 		}
-	}
 
-	if len(p.Asset0Address) != 0 {
-		p.Asset0TokenWalletCode, err = fetchJettonWalletCodeHash(p.Asset0Address)
+		codeCell, err := stack.Cell(4)
 		if err != nil {
 			return err
 		}
+		p.Asset0TokenWalletCode = base64.StdEncoding.EncodeToString(codeCell.Hash())
 	}
 
-	if len(p.Asset1Address) != 0 {
-		p.Asset1TokenWalletCode, err = fetchJettonWalletCodeHash(p.Asset1Address)
-		if err != nil {
-			return err
-		}
+	acc, err := client.GetAccount(ctx, masterBlock, address.MustParseAddr(p.Asset1Address))
+	if err != nil {
+		return err
 	}
+
+	if acc.Code == nil {
+		return fmt.Errorf("asset1 code is nil")
+	}
+
+	p.Asset1Code = base64.StdEncoding.EncodeToString(acc.Code.Hash())
+
+	stack, err := client.RunGetMethod(ctx, masterBlock, address.MustParseAddr(p.Asset1Address), "get_jetton_data", nil)
+	if err != nil {
+		return err
+	}
+
+	codeCell, err := stack.Cell(4)
+	if err != nil {
+		return err
+	}
+	p.Asset1TokenWalletCode = base64.StdEncoding.EncodeToString(codeCell.Hash())
+
+	fmt.Println("asset0 code", p.Asset0Code)
+	fmt.Println("asset1 code", p.Asset1Code)
+	fmt.Println("asset0 token wallet code", p.Asset0TokenWalletCode)
+	fmt.Println("asset1 token wallet code", p.Asset1TokenWalletCode)
 
 	return nil
 }
@@ -283,45 +312,6 @@ func (p *Pool) FetchVaultAddress(ctx context.Context, client ton.APIClientWrappe
 	return nil
 }
 
-func fetchJettonMasterCodeHash(accountId string) (string, error) {
-	url := fmt.Sprintf("http://49.12.81.26:8080/api/v0/accounts?address=%s&latest=true", accountId)
-	antonUrl := fmt.Sprintf("https://anton.tools/api/v0/accounts?address=%s&latest=true", accountId)
-	var resp []byte
-	var err error
-	resp, err = utils.Request(context.Background(), "GET", url, nil)
-	if err == nil && len(resp) > 100 {
-		goto GOT
-	}
-
-	resp, err = utils.Request(context.Background(), "GET", antonUrl, nil)
-	if err != nil {
-		return "", err
-	}
-
-GOT:
-
-	return gjson.Get(string(resp), "results.0.code_hash").String(), nil
-}
-
-func fetchJettonWalletCodeHash(accountId string) (string, error) {
-	url := fmt.Sprintf("http://49.12.81.26:8080/api/v0/accounts?interface=jetton_wallet&minter_address=%s&limit=1", accountId)
-	antonUrl := fmt.Sprintf("https://anton.tools/api/v0/accounts?interface=jetton_wallet&minter_address=%s&limit=1", accountId)
-	var resp []byte
-	var err error
-	resp, err = utils.Request(context.Background(), "GET", url, nil)
-	if err == nil && len(resp) > 100 {
-		goto GOT
-	}
-
-	resp, err = utils.Request(context.Background(), "GET", antonUrl, nil)
-	if err != nil {
-		return "", err
-	}
-
-GOT:
-	return gjson.Get(string(resp), "results.0.code_hash").String(), nil
-}
-
 func (p *Pool) ExistsInDB(db *sqlx.DB) (bool, error) {
 	row, err := db.Query("SELECT * FROM pools WHERE address = ?", p.Address)
 	if err != nil {
@@ -338,6 +328,7 @@ func (p *Pool) ExistsInDB(db *sqlx.DB) (bool, error) {
 }
 
 func (p *Pool) SaveToDB(db *sqlx.DB) error {
+	fmt.Println("saving pool", p.Address)
 	row, err := db.Query("SELECT * FROM pools WHERE address = ?", p.Address)
 	if err != nil {
 		return err

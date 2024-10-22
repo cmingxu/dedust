@@ -31,6 +31,10 @@ func printer(c *cli2.Context) error {
 		c.String("ws-endpoint"),
 		c.String("out-path"),
 		uint32(c.Uint("send-cnt")),
+		c.Bool("use-tonapi"),
+		c.Bool("use-toncenter"),
+		c.Bool("use-andl"),
+		c.String("limit"),
 	)
 	if err != nil {
 		return err

@@ -56,5 +56,7 @@ type JettonTransferParams struct {
 	ResponseDestinaton *address.Address `tlb:"addr"`
 	CustomPayload      *cell.Cell       `tlb:"maybe ^"`
 	ForwardTonAmount   tlb.Coins        `tlb:"."`
-	ForwardPayload     *JettonSwap      `tlb:"either . ^"`
+
+	// if it is stonfi sell, consult https://tonviewer.com/transaction/5ca777a981bbb3ec0376ed79e9323d9043e1da0a55a164579584ec8d2d1ced7f
+	ForwardPayload *JettonSwap `tlb:"either . ^"`
 }

@@ -13,24 +13,24 @@ import (
 	"golang.org/x/net/context"
 )
 
-func (w *BotWallet) Send(ctx context.Context, message *wallet.Message, waitConfirmation ...bool) error {
-	return w.SendMany(ctx, []*wallet.Message{message}, waitConfirmation...)
+func (w *BotWallet) Send(ctx context.Context, op int64, message *wallet.Message, waitConfirmation ...bool) error {
+	return w.SendMany(ctx, op, []*wallet.Message{message}, waitConfirmation...)
 }
 
-func (w *BotWallet) SendMany(ctx context.Context, messages []*wallet.Message, waitConfirmation ...bool) error {
-	_, _, _, err := w.sendMany(ctx, messages, waitConfirmation...)
+func (w *BotWallet) SendMany(ctx context.Context, op int64, messages []*wallet.Message, waitConfirmation ...bool) error {
+	_, _, _, err := w.sendMany(ctx, op, messages, waitConfirmation...)
 	return err
 }
 
 // SendManyGetInMsgHash returns hash of external incoming message payload.
-func (w *BotWallet) SendManyGetInMsgHash(ctx context.Context, messages []*wallet.Message, waitConfirmation ...bool) ([]byte, error) {
-	_, _, inMsgHash, err := w.sendMany(ctx, messages, waitConfirmation...)
+func (w *BotWallet) SendManyGetInMsgHash(ctx context.Context, op int64, messages []*wallet.Message, waitConfirmation ...bool) ([]byte, error) {
+	_, _, inMsgHash, err := w.sendMany(ctx, op, messages, waitConfirmation...)
 	return inMsgHash, err
 }
 
 // SendManyWaitTxHash always waits for tx block confirmation and returns found tx hash in block.
-func (w *BotWallet) SendManyWaitTxHash(ctx context.Context, messages []*wallet.Message) ([]byte, error) {
-	tx, _, _, err := w.sendMany(ctx, messages, true)
+func (w *BotWallet) SendManyWaitTxHash(ctx context.Context, op int64, messages []*wallet.Message) ([]byte, error) {
+	tx, _, _, err := w.sendMany(ctx, op, messages, true)
 	if err != nil {
 		return nil, err
 	}
@@ -38,18 +38,18 @@ func (w *BotWallet) SendManyWaitTxHash(ctx context.Context, messages []*wallet.M
 }
 
 // SendManyWaitTransaction always waits for tx block confirmation and returns found tx.
-func (w *BotWallet) SendManyWaitTransaction(ctx context.Context, messages []*wallet.Message) (*tlb.Transaction, *ton.BlockIDExt, error) {
-	tx, block, _, err := w.sendMany(ctx, messages, true)
+func (w *BotWallet) SendManyWaitTransaction(ctx context.Context, op int64, messages []*wallet.Message) (*tlb.Transaction, *ton.BlockIDExt, error) {
+	tx, block, _, err := w.sendMany(ctx, op, messages, true)
 	return tx, block, err
 }
 
 // SendWaitTransaction always waits for tx block confirmation and returns found tx.
-func (w *BotWallet) SendWaitTransaction(ctx context.Context, message *wallet.Message) (*tlb.Transaction, *ton.BlockIDExt, error) {
-	return w.SendManyWaitTransaction(ctx, []*wallet.Message{message})
+func (w *BotWallet) SendWaitTransaction(ctx context.Context, op int64, message *wallet.Message) (*tlb.Transaction, *ton.BlockIDExt, error) {
+	return w.SendManyWaitTransaction(ctx, op, []*wallet.Message{message})
 }
 
-func (w *BotWallet) sendMany(ctx context.Context, messages []*wallet.Message, waitConfirmation ...bool) (tx *tlb.Transaction, block *ton.BlockIDExt, inMsgHash []byte, err error) {
-	ext, err := w.BuildExternalMessageForMany(ctx, messages)
+func (w *BotWallet) sendMany(ctx context.Context, op int64, messages []*wallet.Message, waitConfirmation ...bool) (tx *tlb.Transaction, block *ton.BlockIDExt, inMsgHash []byte, err error) {
+	ext, err := w.BuildExternalMessageForMany(ctx, op, messages)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -58,8 +58,6 @@ func (w *BotWallet) sendMany(ctx context.Context, messages []*wallet.Message, wa
 	if err = w.api.SendExternalMessage(ctx, ext); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to send message: %w", err)
 	}
-
-	fmt.Println("Sent external message", inMsgHash)
 
 	if len(waitConfirmation) > 0 && waitConfirmation[0] {
 		block, err = w.api.CurrentMasterchainInfo(ctx)
@@ -82,15 +80,15 @@ func (w *BotWallet) sendMany(ctx context.Context, messages []*wallet.Message, wa
 	return tx, block, inMsgHash, nil
 }
 
-func (w *BotWallet) BuildExternalMessageForMany(ctx context.Context, messages []*wallet.Message) (*tlb.ExternalMessage, error) {
-	return w.PrepareExternalMessageForMany(ctx, messages)
+func (w *BotWallet) BuildExternalMessageForMany(ctx context.Context, op int64, messages []*wallet.Message) (*tlb.ExternalMessage, error) {
+	return w.PrepareExternalMessageForMany(ctx, op, messages)
 }
 
 // PrepareExternalMessageForMany - Prepares external message for wallet
 // can be used directly for offline signing but custom fetchers should be defined in this case
-func (w *BotWallet) PrepareExternalMessageForMany(ctx context.Context, messages []*wallet.Message) (_ *tlb.ExternalMessage, err error) {
+func (w *BotWallet) PrepareExternalMessageForMany(ctx context.Context, op int64, messages []*wallet.Message) (_ *tlb.ExternalMessage, err error) {
 
-	msg, err := w.BuildMessage(ctx, messages)
+	msg, err := w.BuildMessage(ctx, op, messages)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +103,7 @@ func (w *BotWallet) PrepareExternalMessageForMany(ctx context.Context, messages 
 	}, nil
 }
 
-func (w *BotWallet) BuildMessage(ctx context.Context, messages []*wallet.Message) (*cell.Cell, error) {
+func (w *BotWallet) BuildMessage(ctx context.Context, op int64, messages []*wallet.Message) (*cell.Cell, error) {
 	if len(messages) > 4 {
 		return nil, errors.New("for this type of wallet max 4 messages can be sent in the same time")
 	}
@@ -113,7 +111,7 @@ func (w *BotWallet) BuildMessage(ctx context.Context, messages []*wallet.Message
 	payload := cell.BeginCell().MustStoreUInt(uint64(SubwalletID), 32).
 		MustStoreUInt(uint64(time.Now().Add(time.Duration(MessageTTL)*time.Second).UTC().Unix()), 32).
 		MustStoreUInt(uint64(w.seq), 32).
-		MustStoreInt(0, 8) // op
+		MustStoreInt(op, 8) // op
 
 	for i, message := range messages {
 		intMsg, err := tlb.ToCell(message.InternalMessage)

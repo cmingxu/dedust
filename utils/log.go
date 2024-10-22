@@ -25,10 +25,10 @@ func SetupLogger(level string) error {
 		return fmt.Errorf("unknown log level: %s", level)
 	}
 
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	zerolog.TimestampFieldName = "timestamp"
-	zerolog.LevelFieldName = "level"
-	zerolog.MessageFieldName = "message"
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnixMs
+	zerolog.TimestampFieldName = "ts"
+	zerolog.LevelFieldName = "lv"
+	zerolog.MessageFieldName = "M"
 
 	return nil
 }

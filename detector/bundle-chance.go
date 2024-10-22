@@ -19,7 +19,29 @@ import (
 
 var (
 	MinmumTradeAmount = big.NewInt(1 * 1e9)
-	MinGasCost        = tlb.MustFromTON("0.1")
+	MinGasCost        = tlb.MustFromTON("0.015")
+
+	Zero     = big.NewInt(0)
+	BN1TON   = tlb.MustFromTON("1").Nano()
+	BN2TON   = tlb.MustFromTON("2").Nano()
+	BN3TON   = tlb.MustFromTON("3").Nano()
+	BN5TON   = tlb.MustFromTON("5").Nano()
+	BN7TON   = tlb.MustFromTON("7").Nano()
+	BN10TON  = tlb.MustFromTON("10").Nano()
+	BN20TON  = tlb.MustFromTON("20").Nano()
+	BN50TON  = tlb.MustFromTON("50").Nano()
+	BN75TON  = tlb.MustFromTON("75").Nano()
+	BN100TON = tlb.MustFromTON("100").Nano()
+	BN120TON = tlb.MustFromTON("120").Nano()
+	BN150TON = tlb.MustFromTON("150").Nano()
+	BN180TON = tlb.MustFromTON("180").Nano()
+	BN200TON = tlb.MustFromTON("200").Nano()
+	BN250TON = tlb.MustFromTON("250").Nano()
+	BN275TON = tlb.MustFromTON("275").Nano()
+	BN300TON = tlb.MustFromTON("300").Nano()
+	BN400TON = tlb.MustFromTON("400").Nano()
+	BN500TON = tlb.MustFromTON("500").Nano()
+	BN600TON = tlb.MustFromTON("600").Nano()
 )
 
 var (
@@ -55,10 +77,12 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 		LatestReserve1: pool.Asset1Reserve,
 		LatestLt:       pool.Lt,
 		CreatedAt:      time.Now(),
+		FirstSeen:      trade.FirstSeen,
 	}
 
 	d.p("=== %s ==== %s ====== \n", pool.Address, trade.Address)
 	d.p("- now is: %s \n", time.Now().Format(time.RFC3339Nano))
+	d.p("- FirstSeen: %s\n", trade.FirstSeen.Format(time.RFC3339Nano))
 	d.p("- VictimTx %s\n", trade.Hash)
 	d.p("- VictimAccountId %s\n", trade.Address)
 	d.p("- VictimAmount %s\n", trade.Amount)
@@ -132,7 +156,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	}
 
 	// if actual out is too close to actual out, might be an bot
-	if model.LimitActualOutRatio().Cmp(big.NewInt(9990)) > 0 {
+	if model.LimitActualOutRatio().Cmp(big.NewInt(9995)) > 0 {
 		return nil, ErrLikelyABot
 	}
 
@@ -167,6 +191,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 			BotJettonOut:      botJettonOut,
 			Profit:            new(big.Int).Sub(botTonOut, mI),
 			Roi:               new(big.Int).Div(new(big.Int).Mul(new(big.Int).Sub(botTonOut, mI), big.NewInt(10000)), mI),
+			IOR0:              new(big.Int).Div(new(big.Int).Mul(mI, big.NewInt(10000)), x),
 		})
 	}
 
@@ -200,7 +225,6 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	pairsAreProfitableEnough := lo.Filter(pairsAreProfitable, func(pair InOut, index int) bool {
 		return pair.Profit.Cmp(MinGasCost.Nano()) > 0
 	})
-
 	d.p("$ pairsAreProfitableEnough(more then gas): %d\n", len(pairsAreProfitableEnough))
 
 	if len(pairsAreProfitableEnough) == 0 {
@@ -209,36 +233,31 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 
 	// 要和 reserve0（TON） 的数量比较，成比例
 	pairsAreProfitableEnough = lo.Filter(pairsAreProfitableEnough, func(pair InOut, index int) bool {
-		botInVsReserve0Ratio := new(big.Int).Div(new(big.Int).Mul(pair.BotIn, big.NewInt(10000)), x)
-		// 如果 botIn 小于 2 TON，可以试试， 跟池子 TON 大小无关
-		if pair.BotIn.Cmp(tlb.MustFromTON("3").Nano()) < 0 {
+		if checkInRange(pair.BotIn, BN200TON, BN400TON, x, BN400TON) {
 			return true
 		}
 
-		if pair.BotIn.Cmp(tlb.MustFromTON("5").Nano()) < 0 && botInVsReserve0Ratio.Cmp(big.NewInt(5000)) < 0 {
+		if checkInRange(pair.BotIn, BN100TON, BN200TON, x, BN300TON) {
 			return true
 		}
 
-		if pair.BotIn.Cmp(tlb.MustFromTON("10").Nano()) < 0 && botInVsReserve0Ratio.Cmp(big.NewInt(2000)) < 0 {
+		if checkInRange(pair.BotIn, BN75TON, BN100TON, x, BN200TON) {
 			return true
 		}
 
-		// 20  30%
-		if pair.BotIn.Cmp(tlb.MustFromTON("20").Nano()) < 0 && botInVsReserve0Ratio.Cmp(big.NewInt(1500)) < 0 {
+		if checkInRange(pair.BotIn, BN50TON, BN100TON, x, BN150TON) {
 			return true
 		}
 
-		// 如果 botIn 大于 20 TON， botInVsReserve0Ratio 小于 20%可以试试
-		if pair.BotIn.Cmp(tlb.MustFromTON("50").Nano()) < 0 && botInVsReserve0Ratio.Cmp(big.NewInt(1000)) < 0 {
+		if checkInRange(pair.BotIn, BN20TON, BN50TON, x, BN120TON) {
 			return true
 		}
 
-		if pair.BotIn.Cmp(tlb.MustFromTON("100").Nano()) < 0 && botInVsReserve0Ratio.Cmp(big.NewInt(500)) < 0 {
+		if checkInRange(pair.BotIn, BN10TON, BN20TON, x, BN50TON) {
 			return true
 		}
 
-		// 如果 botIn 大于 100 TON， botInVsReserve0Ratio 小于 5%可以试试
-		if botInVsReserve0Ratio.Cmp(big.NewInt(500)) < 0 {
+		if pair.BotIn.Cmp(BN10TON) < 0 {
 			return true
 		}
 
@@ -269,8 +288,13 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	chance.BotJettonOut = maxProfitPair.BotJettonOut.String()
 	chance.Profit = maxProfitPair.Profit.String()
 	chance.Roi = maxProfitPair.Roi.String()
+	chance.IOR0 = maxProfitPair.IOR0.String()
 
 	return chance, nil
+}
+
+func checkInRange(a, l, h, actualReserve, reserveL *big.Int) bool {
+	return a.Cmp(l) >= 0 && a.Cmp(h) < 0 && actualReserve.Cmp(reserveL) > 0
 }
 
 func poolInWhiteList(pool *model.Pool) bool {
@@ -322,6 +346,9 @@ func (m *BundleModel) TradeActualOut() *big.Int {
 
 func (m *BundleModel) LimitActualOutRatio() *big.Int {
 	actualYOut := m.TradeActualOut()
+	if actualYOut.Cmp(Zero) == 0 {
+		return big.NewInt(100000000)
+	}
 	return new(big.Int).Div(new(big.Int).Mul(m.Limit, big.NewInt(10000)), actualYOut)
 }
 
@@ -338,6 +365,9 @@ func (m *BundleModel) IfBotBuyAmount(amount *big.Int) (*big.Int, *big.Int, *big.
 	xHat = new(big.Int).Add(m.TradeInWithoutFee, xAfterBotBuy)
 	yHat = new(big.Int).Div(m.K, xHat)
 	tradeJettonOut := new(big.Int).Sub(yAfterBotBuy, yHat)
+	if tradeJettonOut.Cmp(Zero) == 0 {
+		return nil, nil, nil, nil, false
+	}
 	limitVsTradeJettonOut := new(big.Int).Div(new(big.Int).Mul(m.Limit, big.NewInt(10000)), tradeJettonOut)
 	xAfterTradeBuy := new(big.Int).Add(xAfterBotBuy, m.TradeInWithoutFee)
 	yAfterTradeBuy := new(big.Int).Sub(yAfterBotBuy, tradeJettonOut)
@@ -361,6 +391,7 @@ type InOut struct {
 	Profit            *big.Int
 	PossibleLoss      *big.Int
 	Roi               *big.Int
+	IOR0              *big.Int
 }
 
 func (io *InOut) Dump() string {
@@ -377,6 +408,8 @@ func (io *InOut) Dump() string {
 	sb.WriteString(io.PossibleLoss.String())
 	sb.WriteString(", Roi: ")
 	sb.WriteString(io.Roi.String())
+	sb.WriteString(", IOR0: ")
+	sb.WriteString(io.IOR0.String())
 
 	return sb.String()
 }

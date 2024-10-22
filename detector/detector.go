@@ -77,10 +77,11 @@ func NewDetector(dsn string, tonConfig string, out io.Writer) (*Detector, error)
 	// a cache expire at 5s and purge at 10s
 	detector.chanceCache = cache.New(5*time.Second, 1*time.Second)
 
-	// 会将某个 pool 最近 30 的 sell 缓存起来
-	detector.sellingCache = cache.New(50*time.Second, 3*time.Second)
+	// 会将某个 pool 最近 45 的 sell 缓存起来
+	detector.sellingCache = cache.New(45*time.Second, 1*time.Second)
 
-	detector.cooldownCache = cache.New(90*time.Second, 10*time.Second)
+	// 如果多次出现 chance，则该 pool 会被冷却 90s
+	detector.cooldownCache = cache.New(90*time.Second, 1*time.Second)
 
 	return detector, nil
 }
