@@ -70,17 +70,23 @@ func syncPool(c *cli2.Context) error {
 			continue
 		}
 
-		err = pool.FetchAssetCode(ctx, connPool, masterBlock)
+		err = pool.FetchAssetMasterCode(ctx, connPool, masterBlock)
 		if err != nil {
 			log.Err(err).Msg("failed to fetch asset code")
 			continue
 		}
 
-		// err = pool.FetchVaultAddress(ctx, client, block)
-		// if err != nil {
-		// 	log.Err(err).Msg("failed to fetch vault address")
-		// 	return err
-		// }
+		err = pool.FetchVaultAddress(ctx, client, masterBlock)
+		if err != nil {
+			log.Err(err).Msg("failed to fetch vault address")
+			continue
+		}
+
+		err = pool.FetchAssetWalletCode(ctx, client, masterBlock)
+		if err != nil {
+			log.Err(err).Msg("failed to fetch asset wallet code")
+			continue
+		}
 
 		err = pool.SaveToDB(db)
 		if err != nil {

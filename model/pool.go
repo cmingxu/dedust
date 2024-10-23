@@ -8,11 +8,13 @@ import (
 
 	"github.com/cmingxu/dedust/utils"
 	"github.com/jmoiron/sqlx"
+	"github.com/rs/zerolog/log"
 	"github.com/tidwall/gjson"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
-	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
+	"github.com/xssnick/tonutils-go/ton/jetton"
+	"github.com/xssnick/tonutils-go/tvm/cell"
 )
 
 var (
@@ -21,6 +23,8 @@ var (
 		"iUaPAseOVwgC45l5yFFvw43wfqdqSDV+BTbyuns+43s=",
 		"eqG3vmgENk7aC/453lGY0t2R9O7/XrVy7gSz6mqogdk=",
 		"p2DWKdU0PnbQRQF9ncIW/IoweoN3gV/rKwpcSQ5zNIY=",
+		"ngbKMOUIptn7IRZ8u49mOZ7dEZCwsB4LvRTFRsyXpys=",
+		"St9IE1y1da267Udnmch/8pBCabH5Sa2k0EeekQS28hc=",
 	}
 )
 
@@ -189,7 +193,7 @@ func LoadPoolsFromDB(db *sqlx.DB, outstandingOnly bool) ([]*Pool, error) {
 	return pools, err
 }
 
-func (p *Pool) FetchAssetCode(ctx context.Context,
+func (p *Pool) FetchAssetMasterCode(ctx context.Context,
 	conn *liteclient.ConnectionPool,
 	masterBlock *ton.BlockIDExt,
 ) error {
@@ -208,16 +212,6 @@ func (p *Pool) FetchAssetCode(ctx context.Context,
 		}
 
 		p.Asset0Code = base64.StdEncoding.EncodeToString(acc.Code.Hash())
-		stack, err := client.RunGetMethod(ctx, masterBlock, address.MustParseAddr(p.Asset0Address), "get_jetton_data", nil)
-		if err != nil {
-			return err
-		}
-
-		codeCell, err := stack.Cell(4)
-		if err != nil {
-			return err
-		}
-		p.Asset0TokenWalletCode = base64.StdEncoding.EncodeToString(codeCell.Hash())
 	}
 
 	acc, err := client.GetAccount(ctx, masterBlock, address.MustParseAddr(p.Asset1Address))
@@ -231,83 +225,126 @@ func (p *Pool) FetchAssetCode(ctx context.Context,
 
 	p.Asset1Code = base64.StdEncoding.EncodeToString(acc.Code.Hash())
 
-	stack, err := client.RunGetMethod(ctx, masterBlock, address.MustParseAddr(p.Asset1Address), "get_jetton_data", nil)
-	if err != nil {
-		return err
+	return nil
+}
+
+func (p *Pool) FetchVaultAddress(ctx context.Context,
+	client ton.APIClientWrapped,
+	masterBlock *ton.BlockIDExt) error {
+
+	if len(p.Asset0Address) != 0 {
+		addr0 := address.MustParseAddr(p.Asset0Address)
+
+		c := cell.BeginCell().
+			MustStoreUInt(1, 4).
+			MustStoreInt(int64(addr0.Workchain()), 8).
+			MustStoreBinarySnake(addr0.Data())
+
+		stack, err := client.RunGetMethod(ctx, masterBlock,
+			DedustFactory,
+			"get_vault_address", c.EndCell().BeginParse())
+		if err != nil {
+			return err
+		}
+
+		vaultAddrCell, err := stack.Slice(0)
+		if err != nil {
+			return err
+		}
+
+		vaultAddr, err := vaultAddrCell.LoadAddr()
+		if err != nil {
+			return err
+		}
+		p.Asset0Vault = vaultAddr.String()
+		log.Debug().Msgf("pool %s, asset0addr: %s, vault0 addr: %s",
+			p.Address, p.Asset0Address, vaultAddr.String())
 	}
 
-	codeCell, err := stack.Cell(4)
-	if err != nil {
-		return err
-	}
-	p.Asset1TokenWalletCode = base64.StdEncoding.EncodeToString(codeCell.Hash())
+	if len(p.Asset1Address) != 0 {
+		addr1 := address.MustParseAddr(p.Asset1Address)
+		c := cell.BeginCell().
+			MustStoreUInt(1, 4).
+			MustStoreInt(int64(addr1.Workchain()), 8).
+			MustStoreBinarySnake(addr1.Data())
 
-	fmt.Println("asset0 code", p.Asset0Code)
-	fmt.Println("asset1 code", p.Asset1Code)
-	fmt.Println("asset0 token wallet code", p.Asset0TokenWalletCode)
-	fmt.Println("asset1 token wallet code", p.Asset1TokenWalletCode)
+		stack1, err := client.RunGetMethod(ctx, masterBlock,
+			DedustFactory,
+			"get_vault_address", c.EndCell().BeginParse())
+		if err != nil {
+			return err
+		}
+
+		vault1AddrCell, err := stack1.Slice(0)
+		if err != nil {
+			return err
+		}
+
+		vault1Addr, err := vault1AddrCell.LoadAddr()
+		if err != nil {
+			return err
+		}
+		p.Asset1Vault = vault1Addr.String()
+		log.Debug().Msgf("pool %s, asset1addr: %s, vault1 addr: %s",
+			p.Address, p.Asset1Address, vault1Addr.String())
+	}
 
 	return nil
 }
 
-func (p *Pool) FetchVaultAddress(ctx context.Context, client ton.APIClientWrapped,
-	masterBlock *ton.BlockIDExt) error {
+func (p *Pool) FetchAssetWalletCode(
+	ctx context.Context,
+	client ton.APIClientWrapped,
+	masterBlock *ton.BlockIDExt,
+) error {
+	if len(p.Asset0Address) != 0 && len(p.Asset1Vault) != 0 {
+		addr := address.MustParseAddr(p.Asset0Address)
+		master := jetton.NewJettonMasterClient(client, addr)
 
-	type Req struct {
-		_    tlb.Magic        `tlb:"$0001"`
-		Addr *address.Address `tlb:"addr"`
-	}
-	if len(p.Asset0Address) == 0 {
-		return nil
-	}
+		tokenWallet, err := master.GetJettonWallet(ctx, address.MustParseAddr(p.Asset0Vault))
+		if err != nil {
+			return err
+		}
 
-	req := Req{
-		Addr: address.MustParseAddr(p.Asset0Address),
-	}
+		acc, err := client.GetAccount(ctx, masterBlock, tokenWallet.Address())
+		if err != nil {
+			return err
+		}
 
-	c, _ := tlb.ToCell(req)
-	stack, err := client.RunGetMethod(ctx, masterBlock,
-		DedustFactory,
-		"get_vault_address", c.BeginParse())
-	if err != nil {
-		return err
-	}
+		if acc.Code == nil {
+			log.Debug().Msgf("asset0 token wallet %s code is nil", tokenWallet.Address().String())
+			goto NEXT
+		}
 
-	vaultAddrCell, err := stack.Slice(0)
-	if err != nil {
-		return err
-	}
-
-	vaultAddr, err := vaultAddrCell.LoadAddr()
-	if err != nil {
-		return err
-	}
-	p.Asset0Vault = vaultAddr.String()
-	fmt.Println("vault0 addess", p.Asset0Vault)
-
-	req1 := Req{
-		Addr: address.MustParseAddr(p.Asset1Address),
+		p.Asset0TokenWalletCode = base64.StdEncoding.EncodeToString(acc.Code.Hash())
+		log.Debug().Msgf("pool %s, asset0addr: %s, token wallet %s code: %s",
+			p.Address, p.Asset0Address, tokenWallet.Address().String(), p.Asset0TokenWalletCode)
 	}
 
-	c, _ = tlb.ToCell(req1)
-	stack1, err := client.RunGetMethod(ctx, masterBlock,
-		DedustFactory,
-		"get_vault_address", c.BeginParse())
-	if err != nil {
-		return err
-	}
+NEXT:
 
-	vault1AddrCell, err := stack1.Slice(0)
-	if err != nil {
-		return err
-	}
+	if len(p.Asset1Address) != 0 && len(p.Asset1Vault) != 0 {
+		addr := address.MustParseAddr(p.Asset1Address)
+		master := jetton.NewJettonMasterClient(client, addr)
 
-	vault1Addr, err := vault1AddrCell.LoadAddr()
-	if err != nil {
-		return err
+		tokenWallet, err := master.GetJettonWallet(ctx, address.MustParseAddr(p.Asset1Vault))
+		if err != nil {
+			return err
+		}
+
+		acc, err := client.GetAccount(ctx, masterBlock, tokenWallet.Address())
+		if err != nil {
+			return err
+		}
+
+		if acc.Code == nil {
+			return fmt.Errorf("asset1 token wallet code is nil")
+		}
+
+		p.Asset1TokenWalletCode = base64.StdEncoding.EncodeToString(acc.Code.Hash())
+		log.Debug().Msgf("pool %s, asset1addr: %s, token wallet %s code: %s",
+			p.Address, p.Asset1Address, tokenWallet.Address().String(), p.Asset1TokenWalletCode)
 	}
-	p.Asset1Vault = vault1Addr.String()
-	fmt.Println("vault1 addess", p.Asset1Vault)
 
 	return nil
 }
