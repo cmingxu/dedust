@@ -13,6 +13,9 @@ type BundleChance struct {
 	VictimTx         string `json:"victim_tx"`
 	VictimAccountId  string `json:"victim_account_id"`
 	PoolAddress      string `json:"pool_address"`
+	Asset1Address    string `json:"asset1_address"`
+	Asset1Vault      string `json:"asset1_vault"`
+	JettonWalletCode string `json:"jetton_wallet_code"`
 	VictimAmount     string `json:"victim_amount"`
 	VictimLimit      string `json:"victim_limit"`
 	VictimLimitRatio uint64 `json:"victim_limit_ratio"`
@@ -47,6 +50,9 @@ func (b *BundleChance) ShortDump() string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("| VictimAccountId: %s", b.VictimAccountId))
 	sb.WriteString(fmt.Sprintf("| PoolAddress: %s", b.PoolAddress))
+	sb.WriteString(fmt.Sprintf("| Asset1Address: %s", b.Asset1Address))
+	sb.WriteString(fmt.Sprintf("| Asset1Vault: %s", b.Asset1Vault))
+	sb.WriteString(fmt.Sprintf("| JettonWalletCode: %s", b.JettonWalletCode))
 	sb.WriteString(fmt.Sprintf("| VictimAmount: %s", b.VictimAmount))
 	sb.WriteString(fmt.Sprintf("| VictimLimit: %s", b.VictimLimit))
 	sb.WriteString(fmt.Sprintf("| VictimLimitRatio: %d", b.VictimLimitRatio))
@@ -67,11 +73,8 @@ func (b *BundleChance) ShortDump() string {
 	return sb.String()
 }
 
-func (b *BundleChance) CSV(w io.Writer) error {
-	_, err := fmt.Fprintf(w, "%s,%s,%s,%s,%s,%d,%s,%s,%s,%d,%s,%s,%s,%s,%s,%s, %s, %s, %s\n",
-		b.VictimTx, b.VictimAccountId, b.PoolAddress, b.VictimAmount, b.VictimLimit, b.VictimLimitRatio,
-		b.LatestReserve0, b.LatestReserve1, b.LatestLt,
-		b.VictimJettonOut, b.BotIn, b.BotJettonOut, b.BotTonOut, b.Profit, b.Roi, b.IOR0, b.CreatedAt.Format(time.RFC3339Nano), b.FirstSeen.Format(time.RFC3339Nano), time.Now().Format(time.RFC3339Nano),
-	)
-	return err
+func (b *BundleChance) DumpToIO(w io.Writer) error {
+	fmt.Fprintln(w, "======================================")
+	fmt.Fprintln(w, b.ShortDump())
+	return nil
 }

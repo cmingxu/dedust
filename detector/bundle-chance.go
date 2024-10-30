@@ -67,11 +67,14 @@ func (d *Detector) p(format string, args ...interface{}) {
 // to check any trade bundleable or not
 func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*model.BundleChance, error) {
 	chance := &model.BundleChance{
-		VictimTx:        trade.Hash,
-		VictimAccountId: trade.Address,
-		PoolAddress:     pool.Address,
-		VictimAmount:    trade.Amount,
-		VictimLimit:     trade.Limit,
+		VictimTx:         trade.Hash,
+		VictimAccountId:  trade.Address,
+		PoolAddress:      pool.Address,
+		Asset1Address:    pool.Asset1Address,
+		Asset1Vault:      pool.Asset1Vault,
+		JettonWalletCode: pool.JettonWalletCode,
+		VictimAmount:     trade.Amount,
+		VictimLimit:      trade.Limit,
 
 		LatestReserve0: pool.Asset0Reserve,
 		LatestReserve1: pool.Asset1Reserve,

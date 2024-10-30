@@ -57,7 +57,10 @@ const PoolCreationDDL = `
 
 			asset1Code text,
 			asset1TokenWalletCode text,
+			jettonWalletCode text,
 			asset1Vault varchar(255),
+			asset1VaultJettonWalletAddress varchar(255),
+			privateKeyOfG text,
 			createdAt timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 		);
 `
@@ -114,9 +117,14 @@ type Pool struct {
 	Asset0TokenWalletCode string `json:"asset0TokenWalletCode" db:"asset0TokenWalletCode"`
 	Asset1Code            string `json:"asset1Code" db:"asset1Code"`
 	Asset1TokenWalletCode string `json:"asset1TokenWalletCode" db:"asset1TokenWalletCode"`
+	JettonWalletCode      string `json:"jettonWalletCode" db:"jettonWalletCode"`
 
 	Asset0Vault string `json:"asset0Vault" db:"asset0Vault"`
 	Asset1Vault string `json:"asset1Vault" db:"asset1Vault"`
+
+	// Vault 对应的 jetton wallet 地址
+	Asset1VaultJettonWalletAddress string `json:"asset1VaultJettonWalletAddress" db:"asset1VaultJettonWalletAddress"`
+	PrivateKeyOfG                  string `json:"privateKeyOfG" db:"privateKeyOfG"`
 
 	CreatedAt *time.Time `json:"createdAt" db:"createdAt"`
 
@@ -341,6 +349,7 @@ NEXT:
 			return fmt.Errorf("asset1 token wallet code is nil")
 		}
 
+		p.JettonWalletCode = base64.StdEncoding.EncodeToString(acc.Code.ToBOC())
 		p.Asset1TokenWalletCode = base64.StdEncoding.EncodeToString(acc.Code.Hash())
 		log.Debug().Msgf("pool %s, asset1addr: %s, token wallet %s code: %s",
 			p.Address, p.Asset1Address, tokenWallet.Address().String(), p.Asset1TokenWalletCode)
@@ -377,7 +386,7 @@ func (p *Pool) SaveToDB(db *sqlx.DB) error {
 	}
 	row.Close()
 
-	row1, err := db.NamedQuery("INSERT INTO pools (address, lt, totalSupply, type, tradeFee, asset0Address, asset1Address, asset0Type, asset1Type, asset0Name, asset1Name, asset0Symbol, asset1Symbol, asset0Decimal, asset1Decimal, lastPrice, asset0Image, asset1Image, asset0Reserve, asset1Reserve, asset0Code, asset1Code, asset0TokenWalletCode, asset1TokenWalletCode, asset0Vault, asset1Vault) VALUES (:address, :lt, :totalSupply, :type, :tradeFee, :asset0Address, :asset1Address, :asset0Type, :asset1Type, :asset0Name, :asset1Name, :asset0Symbol, :asset1Symbol, :asset0Decimal, :asset1Decimal, :lastPrice, :asset0Image, :asset1Image, :asset0Reserve, :asset1Reserve, :asset0Code, :asset1Code, :asset0TokenWalletCode, :asset1TokenWalletCode, :asset0Vault, :asset1Vault)", p)
+	row1, err := db.NamedQuery("INSERT INTO pools (address, lt, totalSupply, type, tradeFee, asset0Address, asset1Address, asset0Type, asset1Type, asset0Name, asset1Name, asset0Symbol, asset1Symbol, asset0Decimal, asset1Decimal, lastPrice, asset0Image, asset1Image, asset0Reserve, asset1Reserve, asset0Code, asset1Code, asset0TokenWalletCode, asset1TokenWalletCode, asset0Vault, asset1Vault, jettonWalletCode) VALUES (:address, :lt, :totalSupply, :type, :tradeFee, :asset0Address, :asset1Address, :asset0Type, :asset1Type, :asset0Name, :asset1Name, :asset0Symbol, :asset1Symbol, :asset0Decimal, :asset1Decimal, :lastPrice, :asset0Image, :asset1Image, :asset0Reserve, :asset1Reserve, :asset0Code, :asset1Code, :asset0TokenWalletCode, :asset1TokenWalletCode, :asset0Vault, :asset1Vault, :jettonWalletCode)", p)
 	if err != nil {
 		return err
 	}

@@ -31,11 +31,16 @@ func Transfer(ctx context.Context,
 	fmt.Println("Dest address:", destAddr.String())
 	fmt.Println("Bot address:", botAddr.String())
 	fmt.Println("Bot balance:", account.State.Balance)
+	seqno, err := getSeqno(ctx, client, masterBlock, botAddr)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Bot seqno:", seqno)
 
 	if account.State.Balance.Nano().Cmp(amount.Nano()) < 0 {
 		return fmt.Errorf("not enough balance")
 	}
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 137)
+	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, seqno)
 	return botWallet.TransferNoBounce(ctx, destAddr, amount, "you deserved it", true)
 }

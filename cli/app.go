@@ -19,7 +19,7 @@ var (
 
 	host = cli2.StringFlag{
 		Name:  "host",
-		Value: "127.0.0.1",
+		Value: "192.168.8.200",
 	}
 
 	port = cli2.IntFlag{
@@ -151,8 +151,14 @@ func Run(args []string) int {
 		},
 		Commands: []*cli2.Command{
 			{
-				Name:  "info",
-				Flags: []cli2.Flag{&host, &port, &user, &password, &database},
+				Name: "info",
+				Flags: []cli2.Flag{
+					&host,
+					&port,
+					&user,
+					&password,
+					&database,
+				},
 				Action: func(c *cli2.Context) error {
 					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
 						return err

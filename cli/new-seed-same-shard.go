@@ -11,7 +11,6 @@ import (
 )
 
 func NewSeedSameShardWith(addr *address.Address) error {
-
 	for {
 		seeds := wallet.NewSeed()
 		pk := pkFromSeed(seeds)

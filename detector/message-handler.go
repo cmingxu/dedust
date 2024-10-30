@@ -43,7 +43,7 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 
 	log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
 	// log.Debug().Msgf("%s", msg.Body.Dump())
-	log.Debug().Msgf("External Body RefNum: %d\n", msg.Body.RefsNum())
+	log.Debug().Msgf("External Body RefNum: %d", msg.Body.RefsNum())
 
 	d.p("=========================================\n")
 	d.p("=======         BEGIN        ============\n")
