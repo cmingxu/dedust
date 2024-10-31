@@ -41,7 +41,6 @@ func NewGCollector(ctx context.Context,
 }
 
 func (c *GCollector) Run() error {
-
 	ticker := time.NewTicker(120 * time.Second)
 	if err := c.collect(); err != nil {
 		return err
@@ -65,7 +64,7 @@ func (c *GCollector) collect() error {
 	botAddr := bot.BotAddress(c.botPk.Public().(ed25519.PublicKey))
 
 	bundles := []model.Bundle{}
-	if err := c.db.Select(&bundles, "SELECT * FROM bundles WHERE withdraw = ? AND createdAt > ? ", false, time.Now().Add(-time.Second*180)); err != nil {
+	if err := c.db.Select(&bundles, "SELECT * FROM bundles WHERE withdraw = ? AND createdAt < ? ", false, time.Now().Add(-time.Second*300)); err != nil {
 		return err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -139,6 +140,51 @@ func botTransfer(c *cli2.Context) error {
 		ctx,
 		client,
 		pkFromSeed(botWalletSeeds),
+		destAddr,
+		amount,
+	)
+}
+
+func jettonTransferFromG(c *cli2.Context) error {
+	var (
+		err error
+	)
+	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+	// establish connection to the server
+	pool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
+	if err != nil {
+		return err
+	}
+	client := utils.GetAPIClientWithTimeout(pool, time.Second*10)
+
+	amount, err := tlb.FromTON(c.String("amount"))
+	if err != nil {
+		return err
+	}
+
+	destAddr, err := address.ParseAddr(c.String("dest-addr"))
+	if err != nil {
+		return err
+	}
+
+	pkOfGStr := c.String("private-key-of-g")
+	pkOfGRaw, err := hex.DecodeString(pkOfGStr)
+	if err != nil {
+		return err
+	}
+
+	pkOfG := ed25519.PrivateKey(pkOfGRaw)
+	jettonWalletAddr, err := address.ParseAddr(c.String("jetton-wallet-addr"))
+	if err != nil {
+		return err
+	}
+
+	return bot.JettonTransferFromG(
+		ctx,
+		client,
+		pkFromSeed(botWalletSeeds),
+		pkOfG,
+		jettonWalletAddr,
 		destAddr,
 		amount,
 	)

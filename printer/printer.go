@@ -305,13 +305,6 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 		return false
 	}
 
-	skipPool := address.MustParseAddr("EQDilnyFKeGxovZ9lCDSSUGQhPAS8T0VbkUIAqqix4-TgPgW")
-	poolAddr := address.MustParseAddr(chance.PoolAddress)
-	if poolAddr.String() == skipPool.String() {
-		log.Debug().Msg("[-] SKIP, victim is skip pool")
-		return false
-	}
-
 	in := stringToBigInt(chance.BotIn)
 	// 如果余额不足
 	if p.balance.Nano().Cmp(in) < 0 {
@@ -333,19 +326,19 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 		return true
 	}
 
-	if st(in, "20") && bt(profit, "0.18") {
+	if st(in, "20") && bt(profit, "0.12") {
 		return true
 	}
 
-	if st(in, "50") && bt(profit, "0.25") {
+	if st(in, "50") && bt(profit, "0.2") {
 		return true
 	}
 
-	if st(in, "100") && bt(profit, "0.6") {
+	if st(in, "100") && bt(profit, "0.4") {
 		return true
 	}
 
-	if st(in, "150") && bt(profit, "1") {
+	if st(in, "150") && bt(profit, "0.8") {
 		return true
 	}
 

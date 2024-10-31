@@ -82,6 +82,10 @@ var (
 		Usage: "jetton master address",
 	}
 
+	jettonWalletAddr = cli2.StringFlag{
+		Name: "jetton-wallet-addr",
+	}
+
 	vaultAddr = cli2.StringFlag{
 		Name:  "vault-addr",
 		Usage: "dedust vault address",
@@ -475,6 +479,21 @@ func Run(args []string) int {
 				Description: "collect G auto",
 				Action: func(c *cli2.Context) error {
 					return botCollectGAuto(c)
+				},
+			},
+			{
+				Name: "jetton-transfer-from-g",
+				Flags: []cli2.Flag{
+					&amount,
+					&destAddr,
+					&botWalletSeed,
+					&tonConfig,
+					&privateKeyOfG,
+					&jettonWalletAddr,
+				},
+				Description: "collect G auto",
+				Action: func(c *cli2.Context) error {
+					return jettonTransferFromG(c)
 				},
 			},
 		},
