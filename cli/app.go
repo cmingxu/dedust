@@ -403,7 +403,7 @@ func Run(args []string) int {
 				},
 				Description: "to print money",
 				Action: func(c *cli2.Context) error {
-					return printer(c)
+					return startPrinter(c)
 				},
 			},
 			{
@@ -459,6 +459,22 @@ func Run(args []string) int {
 				Description: "collect G",
 				Action: func(c *cli2.Context) error {
 					return botCollectG(c)
+				},
+			},
+			{
+				Name: "collect-g-auto",
+				Flags: []cli2.Flag{
+					&host,
+					&port,
+					&user,
+					&password,
+					&database,
+					&botWalletSeed,
+					&tonConfig,
+				},
+				Description: "collect G auto",
+				Action: func(c *cli2.Context) error {
+					return botCollectGAuto(c)
 				},
 			},
 		},

@@ -7,11 +7,9 @@ import (
 
 	"github.com/cmingxu/dedust/bot"
 	"github.com/cmingxu/dedust/model"
-	"github.com/cmingxu/dedust/utils"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 	"github.com/xssnick/tonutils-go/address"
-	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
 	"github.com/xssnick/tonutils-go/ton/wallet"
@@ -21,31 +19,34 @@ import (
 type GCollector struct {
 	db     *sqlx.DB
 	ctx    context.Context
-	pool   *liteclient.ConnectionPool
 	client ton.APIClientWrapped
 	botPk  ed25519.PrivateKey
 }
 
 func NewGCollector(ctx context.Context,
-	pool *liteclient.ConnectionPool,
+	client ton.APIClientWrapped,
 	db *sqlx.DB,
 	botPk ed25519.PrivateKey,
 	destAddr *address.Address,
 ) *GCollector {
 	c := &GCollector{
-		ctx:   ctx,
-		db:    db,
-		pool:  pool,
-		botPk: botPk,
+		ctx:    ctx,
+		client: client,
+		db:     db,
+		botPk:  botPk,
 	}
 
-	c.client = utils.GetAPIClient(pool)
 	return c
 
 }
 
 func (c *GCollector) Run() error {
+
 	ticker := time.NewTicker(120 * time.Second)
+	if err := c.collect(); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-c.ctx.Done():
@@ -59,10 +60,12 @@ func (c *GCollector) Run() error {
 }
 
 func (c *GCollector) collect() error {
+	log.Info().Msg("collecting now")
+
 	botAddr := bot.BotAddress(c.botPk.Public().(ed25519.PublicKey))
 
 	bundles := []model.Bundle{}
-	if err := c.db.Select(&bundles, "SELECT * FROM bundles WHERE withdraw = ? AND created_at > ? ", false, time.Now().Add(-time.Second*120)); err != nil {
+	if err := c.db.Select(&bundles, "SELECT * FROM bundles WHERE withdraw = ? AND createdAt > ? ", false, time.Now().Add(-time.Second*180)); err != nil {
 		return err
 	}
 

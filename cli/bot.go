@@ -4,7 +4,6 @@ import (
 	"crypto/ed25519"
 	"crypto/hmac"
 	"crypto/sha512"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -221,39 +220,6 @@ func botDedustSell(c *cli2.Context) error {
 		jettonMaterAddr,
 		vaultAddr,
 		poolAddr,
-	)
-}
-
-func botCollectG(c *cli2.Context) error {
-	var (
-		err error
-	)
-	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
-
-	gPKStr := c.String("private-key-of-g")
-	if len(gPKStr) == 0 {
-		return fmt.Errorf("private-key-of-g is required")
-	}
-
-	gpkRaw, err := hex.DecodeString(gPKStr)
-	if err != nil {
-		return err
-	}
-
-	gpk := ed25519.PrivateKey(gpkRaw)
-
-	// establish connection to the server
-	connPool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
-	if err != nil {
-		return err
-	}
-	client := utils.GetAPIClientWithTimeout(connPool, time.Second*30)
-
-	return bot.CollectG(
-		ctx,
-		client,
-		pkFromSeed(botWalletSeeds),
-		gpk,
 	)
 }
 

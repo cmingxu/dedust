@@ -202,7 +202,7 @@ func (p *Printer) Run() error {
 					limit.Nano(),
 					nextLimit.Nano(),
 					uint64(deadline.Unix()),
-					nil,
+					gAddr,
 				)
 
 				msgs := []*wallet.Message{msg, g}
@@ -324,9 +324,8 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 		return false
 	}
 
-	// 如果期望收益大于 1TON，直接上
 	profit := stringToBigInt(chance.Profit)
-	if profit.Cmp(tlb.MustFromTON("0.12").Nano()) < 0 {
+	if profit.Cmp(tlb.MustFromTON("0.1").Nano()) < 0 {
 		return false
 	}
 

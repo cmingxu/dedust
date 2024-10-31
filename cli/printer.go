@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/cmingxu/dedust/bot"
-	printerPkg "github.com/cmingxu/dedust/printer"
+	"github.com/cmingxu/dedust/printer"
 	"github.com/cmingxu/dedust/utils"
 	cli2 "github.com/urfave/cli/v2"
 )
 
-func printer(c *cli2.Context) error {
+func startPrinter(c *cli2.Context) error {
 	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
 
 	// establish connection to the server
@@ -23,7 +23,7 @@ func printer(c *cli2.Context) error {
 	botprivateKey := pkFromSeed(botWalletSeeds)
 	botAddr := bot.BotAddress(botprivateKey.Public().(ed25519.PublicKey))
 
-	p, err := printerPkg.NewPrinter(ctx,
+	p, err := printer.NewPrinter(ctx,
 		pool,
 		client,
 		botAddr,
