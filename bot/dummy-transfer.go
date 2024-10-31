@@ -39,7 +39,7 @@ func DummyTransfer(ctx context.Context,
 		return fmt.Errorf("not enough balance")
 	}
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 1143)
+	botWallet := NewBotWallet(ctx, client, botprivateKey, 1143)
 	// return botWallet.TransferNoBounce(ctx, destAddr, amount, "you deserved it", true)
 
 	transferInternalMsg, err := botWallet.BuildTransfer(destAddr, amount, false, "(_))")

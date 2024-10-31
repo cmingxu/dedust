@@ -43,14 +43,28 @@ type BotWallet struct {
 func NewBotWallet(
 	ctx context.Context,
 	client ton.APIClientWrapped,
-	addr *address.Address,
 	botprivateKey ed25519.PrivateKey,
 	seq uint64,
 ) *BotWallet {
 	return &BotWallet{
-		addr: addr,
+		addr: botAddress(botprivateKey.Public().(ed25519.PublicKey)),
 		api:  client,
 		pk:   botprivateKey,
+		seq:  seq,
+	}
+}
+
+func NewGWallet(
+	ctx context.Context,
+	client ton.APIClientWrapped,
+	gPrivateKey ed25519.PrivateKey,
+	botAddr *address.Address,
+	seq uint64,
+) *BotWallet {
+	return &BotWallet{
+		addr: gAddress(gPrivateKey.Public().(ed25519.PublicKey), botAddr),
+		api:  client,
+		pk:   gPrivateKey,
 		seq:  seq,
 	}
 }
@@ -155,18 +169,21 @@ func (w *BotWallet) BuildDedustSell(
 func (w *BotWallet) BuildBundle(poolAddr *address.Address,
 	amount *big.Int, limit *big.Int, nextLimit *big.Int,
 	deadline uint64,
+	gaddr *address.Address,
 ) (_ *wallet.Message) {
 
 	passingPoolAddr := cell.BeginCell().
 		MustStoreAddr(poolAddr).
+		MustStoreAddr(w.addr).
 		EndCell()
 
 	swapParamsRef := cell.BeginCell().
 		MustStoreUInt(uint64(deadline), 32). // deadline
-		MustStoreAddr(w.addr).               // receipent address
-		MustStoreAddr(nil).                  // referer address
-		MustStoreMaybeRef(passingPoolAddr).  // fulfillPayload
-		MustStoreMaybeRef(passingPoolAddr).  // rejectPayload
+		// MustStoreAddr(w.addr).               // receipent address
+		MustStoreAddr(gaddr).               // receipent address
+		MustStoreAddr(nil).                 // referer address
+		MustStoreMaybeRef(passingPoolAddr). // fulfillPayload
+		MustStoreMaybeRef(passingPoolAddr). // rejectPayload
 		EndCell()
 
 		// sell imeidiately

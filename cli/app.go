@@ -140,6 +140,12 @@ var (
 		Value: "50",
 		Usage: "Set the limit amount of TON to bundle",
 	}
+
+	privateKeyOfG = cli2.StringFlag{
+		Name:  "private-key-of-g",
+		Value: "",
+		Usage: "Set the private key",
+	}
 )
 
 func Run(args []string) int {
@@ -191,6 +197,7 @@ func Run(args []string) int {
 					&password,
 					&database,
 					&tonConfig,
+					&botWalletSeed,
 				},
 				Action: func(c *cli2.Context) error {
 					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
@@ -312,6 +319,11 @@ func Run(args []string) int {
 					&botWalletSeed,
 					&poolAddr,
 					&amount,
+					&host,
+					&port,
+					&user,
+					&password,
+					&database,
 				},
 				Action: func(c *cli2.Context) error {
 					if err := utils.SetupLogger(c.String("loglevel")); err != nil {
@@ -383,6 +395,11 @@ func Run(args []string) int {
 					&useTonCenter,
 					&useANDL,
 					&limit,
+					&host,
+					&port,
+					&user,
+					&password,
+					&database,
 				},
 				Description: "to print money",
 				Action: func(c *cli2.Context) error {
@@ -410,6 +427,38 @@ func Run(args []string) int {
 				Description: "generate base64 send message(external)",
 				Action: func(c *cli2.Context) error {
 					return buildTransferMessage(c)
+				},
+			},
+			{
+				Name: "generate-g",
+				Flags: []cli2.Flag{
+					&host,
+					&port,
+					&user,
+					&password,
+					&database,
+					&botWalletSeed,
+				},
+				Description: "generate G",
+				Action: func(c *cli2.Context) error {
+					return GenGForPools(c)
+				},
+			},
+			{
+				Name: "collect-g",
+				Flags: []cli2.Flag{
+					&host,
+					&port,
+					&user,
+					&password,
+					&database,
+					&botWalletSeed,
+					&privateKeyOfG,
+					&tonConfig,
+				},
+				Description: "collect G",
+				Action: func(c *cli2.Context) error {
+					return botCollectG(c)
 				},
 			},
 		},

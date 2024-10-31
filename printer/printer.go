@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -17,6 +18,7 @@ import (
 	"github.com/cmingxu/dedust/model"
 	"github.com/cmingxu/dedust/utils"
 	"github.com/gorilla/websocket"
+	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
@@ -61,6 +63,8 @@ type Printer struct {
 	upperlimit *big.Int
 
 	httpClt *http.Client
+
+	db *sqlx.DB
 }
 
 func NewPrinter(
@@ -76,6 +80,7 @@ func NewPrinter(
 	useTonCenter bool,
 	useANDL bool,
 	limit string,
+	mysql string,
 ) (*Printer, error) {
 	p := &Printer{
 		wsEndpoint:    wsEndpoint,
@@ -108,6 +113,12 @@ func NewPrinter(
 	}
 
 	p.working = false
+
+	p.db, err = sqlx.Connect("mysql", mysql)
+	if err != nil {
+		return nil, err
+	}
+
 	return p, nil
 }
 
@@ -173,19 +184,33 @@ func (p *Printer) Run() error {
 					poolAddr.String(), botInAmount.String(), limit.String(), nextLimit.String(),
 					deadline.Format(time.RFC3339Nano))
 
-				nbot := bot.NewBotWallet(p.ctx, p.client, p.addr, p.botPrivateKey, p.seqno)
+				nbot := bot.NewBotWallet(p.ctx, p.client, p.botPrivateKey, p.seqno)
+
+				pk, err := hex.DecodeString(chance.PrivateKeyOfG)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to decode private key")
+					continue
+				}
+
+				g, gAddr, _ := bot.BuildG(p.addr,
+					pk,
+					tlb.MustFromTON("0.3"))
+
 				msg := nbot.BuildBundle(
 					poolAddr,
 					botInAmount.Nano(),
 					limit.Nano(),
 					nextLimit.Nano(),
-					uint64(deadline.Unix()))
+					uint64(deadline.Unix()),
+					nil,
+				)
 
-				var err error
+				msgs := []*wallet.Message{msg, g}
+
 				if p.useANDL {
 					go func() {
 						log.Debug().Msgf("sending with ANDL %d", p.sendCnt)
-						if err = p.SendWithANDL(&chance, nbot, msg); err != nil {
+						if err = p.SendWithANDL(&chance, nbot, msgs); err != nil {
 							log.Error().Err(err).Msg("failed to send")
 						}
 					}()
@@ -194,7 +219,7 @@ func (p *Printer) Run() error {
 				if p.useTonAPI {
 					go func() {
 						err := utils.TimeitReturnError("sending with TONAPI", func() error {
-							return p.SendWithTONAPI(&chance, nbot, msg)
+							return p.SendWithTONAPI(&chance, nbot, msgs)
 						})
 
 						if err != nil {
@@ -206,7 +231,7 @@ func (p *Printer) Run() error {
 				if p.useTonCenter {
 					go func() {
 						err := utils.TimeitReturnError("sending with TONCENTER", func() error {
-							return p.SendWithTONCenter(&chance, nbot, msg)
+							return p.SendWithTONCenter(&chance, nbot, msgs)
 						})
 
 						if err != nil {
@@ -217,6 +242,10 @@ func (p *Printer) Run() error {
 
 				if err != nil {
 					log.Error().Err(err).Msg("failed to send")
+				}
+
+				if err = p.SaveGActionInDB(chance.PrivateKeyOfG, gAddr.String()); err != nil {
+					log.Error().Err(err).Msg("failed to save g action")
 				}
 
 				timer.Reset(60 * time.Second)
@@ -343,7 +372,7 @@ func stringToBigInt(s string) *big.Int {
 func (p *Printer) SendWithANDL(
 	chance *model.BundleChance,
 	nbot *bot.BotWallet,
-	msg *wallet.Message,
+	msgs []*wallet.Message,
 ) error {
 	var err error
 	// t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/b")
@@ -377,8 +406,7 @@ func (p *Printer) SendWithANDL(
 
 			nid, _ := c.Value("_ton_node_sticky").(uint32)
 			err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
-				//t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.0001"), fmt.Sprintf("a/%d", nid))
-				return nbot.SendMany(c, SendModeObsolate, []*wallet.Message{msg}, false)
+				return nbot.SendMany(c, SendModeObsolate, msgs, false)
 			})
 
 			if err != nil {
@@ -398,13 +426,13 @@ func (p *Printer) SendWithANDL(
 
 func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 	nbot *bot.BotWallet,
-	msg *wallet.Message) error {
+	msgs []*wallet.Message) error {
 	c := context.Background()
 
 	// t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/a")
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
 		SendModeObsolate,
-		[]*wallet.Message{msg})
+		msgs)
 	if err != nil {
 		return err
 	}
@@ -442,13 +470,14 @@ func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 }
 func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 	nbot *bot.BotWallet,
-	msg *wallet.Message) error {
+	msgs []*wallet.Message) error {
 	c := context.Background()
 
-	//t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/c")
+	//t, _:= p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/c")
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
 		SendModeObsolate,
-		[]*wallet.Message{msg})
+		msgs,
+	)
 	if err != nil {
 		return err
 	}
@@ -487,4 +516,13 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 
 func (p *Printer) BuildAuxTransfer(bw *bot.BotWallet, amount tlb.Coins, comment string) (*wallet.Message, error) {
 	return bw.BuildTransfer(DCM_ADDR, amount, true, comment)
+}
+
+func (p *Printer) SaveGActionInDB(pk, addr string) error {
+	bundle := model.Bundle{
+		Address:    addr,
+		PrivateKey: pk,
+	}
+
+	return bundle.SaveToDB(p.db)
 }

@@ -27,5 +27,9 @@ func bootstrap(c *cli2.Context) error {
 		fmt.Fprintf(os.Stderr, "%+v", err)
 	}
 
+	if err := model.CreateBundleTableIfNotExists(db); err != nil {
+		fmt.Fprintf(os.Stderr, "%+v", err)
+	}
+
 	return nil
 }

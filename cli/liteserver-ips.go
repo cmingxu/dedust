@@ -42,7 +42,6 @@ func LiteserverIps(c *cli2.Context) error {
 		id := ctx.Value("_ton_node_sticky").(uint32)
 
 		fmt.Printf("Node ID: %d, IP: %s\n", id, intToIp(uint64(id)))
-
 		utils.Timeit("", func() {
 			t, err := client.GetTime(ctx)
 			if err != nil {

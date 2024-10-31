@@ -35,6 +35,7 @@ func printer(c *cli2.Context) error {
 		c.Bool("use-toncenter"),
 		c.Bool("use-andl"),
 		c.String("limit"),
+		utils.ConstructDSN(c),
 	)
 	if err != nil {
 		return err

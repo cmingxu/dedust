@@ -41,6 +41,6 @@ func Transfer(ctx context.Context,
 		return fmt.Errorf("not enough balance")
 	}
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, seqno)
+	botWallet := NewBotWallet(ctx, client, botprivateKey, seqno)
 	return botWallet.TransferNoBounce(ctx, destAddr, amount, "you deserved it", true)
 }

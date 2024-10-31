@@ -2,13 +2,17 @@ package bot
 
 import (
 	"crypto/ed25519"
+	"encoding/hex"
 	"fmt"
+	"os"
 
-	"github.com/rs/zerolog/log"
+	"github.com/cmingxu/dedust/model"
+	"github.com/jmoiron/sqlx"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
+	"github.com/xssnick/tonutils-go/ton/wallet"
 	"golang.org/x/net/context"
 )
 
@@ -20,37 +24,54 @@ func Bundle(
 	poolAddr *address.Address,
 	tonIn tlb.Coins,
 	limit tlb.Coins,
+	db *sqlx.DB,
 ) error {
 	botAddr := botAddress(botprivateKey.Public().(ed25519.PublicKey))
-
 	fmt.Println("Bot address:", botAddr.String())
 
-	botWallet := NewBotWallet(ctx, client, botAddr, botprivateKey, 0)
+	masterBlock, err := client.GetMasterchainInfo(ctx)
+	if err != nil {
+		return err
+	}
+
+	seqno, err := GetSeqno(ctx, client, masterBlock, botAddr)
+	if err != nil {
+		return err
+	}
+
+	botWallet := NewBotWallet(ctx, client, botprivateKey, seqno)
+	var pk ed25519.PrivateKey
+
+	if os.Getenv("PKOFG") != "" {
+		pkRaw := os.Getenv("PKOFG")
+		pk, _ = hex.DecodeString(pkRaw)
+	} else {
+		var p model.Pool
+		err := db.Get(&p, "SELECT * FROM pools WHERE address = ?", poolAddr.String())
+		if err != nil {
+			return err
+		}
+
+		pk, err = hex.DecodeString(p.PrivateKeyOfG.String)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("PK: ", hex.EncodeToString(pk))
+	deployGMsg, gAddr, err := BuildG(botAddr, pk, tlb.MustFromTON("0.3"))
+	if err != nil {
+		return err
+	}
 
 	nextLimit := tonIn
 	msg := botWallet.BuildBundle(poolAddr, tonIn.Nano(), limit.Nano(),
-		nextLimit.Nano(), 0)
+		nextLimit.Nano(), 0, gAddr)
 
-	// botWallet.Send(ctx, msg, false)
+	fmt.Println("G address:", gAddr.String())
+	fmt.Println("G deploy message:", deployGMsg)
 
-	i := 0
-	for i <= 5 {
-		ctx := context.WithValue(context.Background(), "foo", struct{}{})
-		nodeCtx, err := pool.StickyContextNextNodeBalanced(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to get next node")
-			break
-		}
+	fmt.Println("Bundle message:", msg)
 
-		err = botWallet.Send(nodeCtx, 5, msg, false)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to send bundle")
-		}
-
-		nodeId, _ := nodeCtx.Value("_ton_node_sticky").(uint32)
-		log.Debug().Msgf("sent bundle to node %d[%d]", nodeId, i)
-		i++
-	}
-
-	return nil
+	return botWallet.SendMany(ctx, 5, []*wallet.Message{deployGMsg, msg}, false)
 }

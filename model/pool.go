@@ -2,11 +2,14 @@ package model
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"time"
 
 	"github.com/cmingxu/dedust/utils"
+	"github.com/cmingxu/dedust/wallet"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 	"github.com/tidwall/gjson"
@@ -21,10 +24,13 @@ var (
 	ValidJettonWalletHash = []string{
 		"vrBoPr64kn/p/I7AoYvH3ReJlomCWhIeq0bFo6hg0M4=",
 		"iUaPAseOVwgC45l5yFFvw43wfqdqSDV+BTbyuns+43s=",
-		"eqG3vmgENk7aC/453lGY0t2R9O7/XrVy7gSz6mqogdk=",
 		"p2DWKdU0PnbQRQF9ncIW/IoweoN3gV/rKwpcSQ5zNIY=",
-		"ngbKMOUIptn7IRZ8u49mOZ7dEZCwsB4LvRTFRsyXpys=",
-		"St9IE1y1da267Udnmch/8pBCabH5Sa2k0EeekQS28hc=",
+	}
+
+	WalletCodeBOCs = map[string]string{
+		"vrBoPr64kn/p/I7AoYvH3ReJlomCWhIeq0bFo6hg0M4=": "b5ee9c7201021101000323000114ff00f4a413f4bcf2c80b0102016202030202cc0405001ba0f605da89a1f401f481f481a8610201d40607020120080900c30831c02497c138007434c0c05c6c2544d7c0fc03383e903e900c7e800c5c75c87e800c7e800c1cea6d0000b4c7e08403e29fa954882ea54c4d167c0278208405e3514654882ea58c511100fc02b80d60841657c1ef2ea4d67c02f817c12103fcbc2000113e910c1c2ebcb853600201200a0b0083d40106b90f6a2687d007d207d206a1802698fc1080bc6a28ca9105d41083deecbef09dd0958f97162e99f98fd001809d02811e428027d012c678b00e78b6664f6aa401f1503d33ffa00fa4021f001ed44d0fa00fa40fa40d4305136a1522ac705f2e2c128c2fff2e2c254344270542013541403c85004fa0258cf1601cf16ccc922c8cb0112f400f400cb00c920f9007074c8cb02ca07cbffc9d004fa40f40431fa0020d749c200f2e2c4778018c8cb055008cf1670fa0217cb6b13cc80c0201200d0e009e8210178d4519c8cb1f19cb3f5007fa0222cf165006cf1625fa025003cf16c95005cc2391729171e25008a813a08209c9c380a014bcf2e2c504c98040fb001023c85004fa0258cf1601cf16ccc9ed5402f73b51343e803e903e90350c0234cffe80145468017e903e9014d6f1c1551cdb5c150804d50500f214013e809633c58073c5b33248b232c044bd003d0032c0327e401c1d3232c0b281f2fff274140371c1472c7cb8b0c2be80146a2860822625a019ad822860822625a028062849e5c412440e0dd7c138c34975c2c0600f1000d73b51343e803e903e90350c01f4cffe803e900c145468549271c17cb8b049f0bffcb8b08160824c4b402805af3cb8b0e0841ef765f7b232c7c572cfd400fe8088b3c58073c5b25c60063232c14933c59c3e80b2dab33260103ec01004f214013e809633c58073c5b3327b552000705279a018a182107362d09cc8cb1f5230cb3f58fa025007cf165007cf16c9718010c8cb0524cf165006fa0215cb6a14ccc971fb0010241023007cc30023c200b08e218210d53276db708010c8cb055008cf165004fa0216cb6a12cb1f12cb3fc972fb0093356c21e203c85004fa0258cf1601cf16ccc9ed54",
+		"iUaPAseOVwgC45l5yFFvw43wfqdqSDV+BTbyuns+43s=": "b5ee9c7201021101000323000114ff00f4a413f4bcf2c80b0102016202030202cc0405001ba0f605da89a1f401f481f481a8610201d40607020120080900c30831c02497c138007434c0c05c6c2544d7c0fc03383e903e900c7e800c5c75c87e800c7e800c1cea6d0000b4c7e08403e29fa954882ea54c4d167c0278208405e3514654882ea58c511100fc02b80d60841657c1ef2ea4d67c02f817c12103fcbc2000113e910c1c2ebcb853600201200a0b0083d40106b90f6a2687d007d207d206a1802698fc1080bc6a28ca9105d41083deecbef09dd0958f97162e99f98fd001809d02811e428027d012c678b00e78b6664f6aa401f1503d33ffa00fa4021f001ed44d0fa00fa40fa40d4305136a1522ac705f2e2c128c2fff2e2c254344270542013541403c85004fa0258cf1601cf16ccc922c8cb0112f400f400cb00c920f9007074c8cb02ca07cbffc9d004fa40f40431fa0020d749c200f2e2c4778018c8cb055008cf1670fa0217cb6b13cc80c0201200d0e009e8210178d4519c8cb1f19cb3f5007fa0222cf165006cf1625fa025003cf16c95005cc2391729171e25008a813a08209c9c380a014bcf2e2c504c98040fb001023c85004fa0258cf1601cf16ccc9ed5402f73b51343e803e903e90350c0234cffe80145468017e903e9014d6f1c1551cdb5c150804d50500f214013e809633c58073c5b33248b232c044bd003d0032c0327e401c1d3232c0b281f2fff274140371c1472c7cb8b0c2be80146a2860822625a019ad822860822625a028062849e5c412440e0dd7c138c34975c2c0600f1000d73b51343e803e903e90350c01f4cffe803e900c145468549271c17cb8b049f0bffcb8b08160824c4b402805af3cb8b0e0841ef765f7b232c7c572cfd400fe8088b3c58073c5b25c60063232c14933c59c3e80b2dab33260103ec01004f214013e809633c58073c5b3327b552000705279a018a182107362d09cc8cb1f5230cb3f58fa025007cf165007cf16c9718010c8cb0524cf165006fa0215cb6a14ccc971fb0010241023007cc30023c200b08e218210d53276db708010c8cb055008cf165004fa0216cb6a12cb1f12cb3fc972fb0093356c21e203c85004fa0258cf1601cf16ccc9ed54",
+		"p2DWKdU0PnbQRQF9ncIW/IoweoN3gV/rKwpcSQ5zNIY=": "b5ee9c7201021201000334000114ff00f4a413f4bcf2c80b0102016202030202cc0405001ba0f605da89a1f401f481f481a8610201d40607020148080900c30831c02497c138007434c0c05c6c2544d7c0fc02f83e903e900c7e800c5c75c87e800c7e800c1cea6d0000b4c7e08403e29fa954882ea54c4d167c0238208405e3514654882ea58c511100fc02780d60841657c1ef2ea4d67c02b817c12103fcbc2000113e910c1c2ebcb853600201200a0b020120101101f100f4cffe803e90087c007b51343e803e903e90350c144da8548ab1c17cb8b04a30bffcb8b0950d109c150804d50500f214013e809633c58073c5b33248b232c044bd003d0032c032483e401c1d3232c0b281f2fff274013e903d010c7e800835d270803cb8b11de0063232c1540233c59c3e8085f2dac4f3200c03f73b51343e803e903e90350c0234cffe80145468017e903e9014d6f1c1551cdb5c150804d50500f214013e809633c58073c5b33248b232c044bd003d0032c0327e401c1d3232c0b281f2fff274140371c1472c7cb8b0c2be80146a2860822625a020822625a004ad8228608239387028062849f8c3c975c2c070c008e00d0e0f00ae8210178d4519c8cb1f19cb3f5007fa0222cf165006cf1625fa025003cf16c95005cc2391729171e25008a813a08208e4e1c0aa008208989680a0a014bcf2e2c504c98040fb001023c85004fa0258cf1601cf16ccc9ed5400705279a018a182107362d09cc8cb1f5230cb3f58fa025007cf165007cf16c9718010c8cb0524cf165006fa0215cb6a14ccc971fb0010241023000e10491038375f040076c200b08e218210d53276db708010c8cb055008cf165004fa0216cb6a12cb1f12cb3fc972fb0093356c21e203c85004fa0258cf1601cf16ccc9ed5400db3b51343e803e903e90350c01f4cffe803e900c145468549271c17cb8b049f0bffcb8b0a0823938702a8005a805af3cb8b0e0841ef765f7b232c7c572cfd400fe8088b3c58073c5b25c60063232c14933c59c3e80b2dab33260103ec01004f214013e809633c58073c5b3327b55200083200835c87b51343e803e903e90350c0134c7e08405e3514654882ea0841ef765f784ee84ac7cb8b174cfcc7e800c04e81408f214013e809633c58073c5b3327b5520",
 	}
 )
 
@@ -61,6 +67,7 @@ const PoolCreationDDL = `
 			asset1Vault varchar(255),
 			asset1VaultJettonWalletAddress varchar(255),
 			privateKeyOfG text,
+			gAddr varchar(255),
 			createdAt timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 		);
 `
@@ -123,8 +130,9 @@ type Pool struct {
 	Asset1Vault string `json:"asset1Vault" db:"asset1Vault"`
 
 	// Vault 对应的 jetton wallet 地址
-	Asset1VaultJettonWalletAddress string `json:"asset1VaultJettonWalletAddress" db:"asset1VaultJettonWalletAddress"`
-	PrivateKeyOfG                  string `json:"privateKeyOfG" db:"privateKeyOfG"`
+	Asset1VaultJettonWalletAddress sql.NullString `json:"asset1VaultJettonWalletAddress" db:"asset1VaultJettonWalletAddress"`
+	PrivateKeyOfG                  sql.NullString `json:"privateKeyOfG" db:"privateKeyOfG"`
+	GAddr                          sql.NullString `json:"gAddr" db:"gAddr"`
 
 	CreatedAt *time.Time `json:"createdAt" db:"createdAt"`
 
@@ -358,6 +366,43 @@ NEXT:
 	return nil
 }
 
+func (p *Pool) GenerateVault1JettonWalletAddress() error {
+	if len(p.Asset1TokenWalletCode) == 0 {
+		return fmt.Errorf("asset1 token wallet code is empty")
+	}
+
+	if len(p.Asset1Vault) == 0 {
+		return fmt.Errorf("asset1 vault address is empty")
+	}
+
+	if len(p.Asset1Address) == 0 {
+		return fmt.Errorf("asset1 address is empty")
+	}
+
+	vault1Addr := address.MustParseAddr(p.Asset1Vault)
+	asset1JettonMasterAddr := address.MustParseAddr(p.Asset1Address)
+	code, ok := WalletCodeBOCs[p.Asset1TokenWalletCode]
+	if !ok {
+		return fmt.Errorf("asset1 token wallet code not found")
+	}
+
+	content, _ := hex.DecodeString(code)
+	codeCell, _ := cell.FromBOC(content)
+
+	jettonWalletCell := wallet.CalculateUserJettonWalletAddress(
+		vault1Addr,
+		asset1JettonMasterAddr,
+		codeCell,
+	)
+
+	p.Asset1VaultJettonWalletAddress = sql.NullString{
+		String: utils.CellToAddress(jettonWalletCell).String(),
+		Valid:  true,
+	}
+
+	return nil
+}
+
 func (p *Pool) ExistsInDB(db *sqlx.DB) (bool, error) {
 	row, err := db.Query("SELECT * FROM pools WHERE address = ?", p.Address)
 	if err != nil {
@@ -386,7 +431,7 @@ func (p *Pool) SaveToDB(db *sqlx.DB) error {
 	}
 	row.Close()
 
-	row1, err := db.NamedQuery("INSERT INTO pools (address, lt, totalSupply, type, tradeFee, asset0Address, asset1Address, asset0Type, asset1Type, asset0Name, asset1Name, asset0Symbol, asset1Symbol, asset0Decimal, asset1Decimal, lastPrice, asset0Image, asset1Image, asset0Reserve, asset1Reserve, asset0Code, asset1Code, asset0TokenWalletCode, asset1TokenWalletCode, asset0Vault, asset1Vault, jettonWalletCode) VALUES (:address, :lt, :totalSupply, :type, :tradeFee, :asset0Address, :asset1Address, :asset0Type, :asset1Type, :asset0Name, :asset1Name, :asset0Symbol, :asset1Symbol, :asset0Decimal, :asset1Decimal, :lastPrice, :asset0Image, :asset1Image, :asset0Reserve, :asset1Reserve, :asset0Code, :asset1Code, :asset0TokenWalletCode, :asset1TokenWalletCode, :asset0Vault, :asset1Vault, :jettonWalletCode)", p)
+	row1, err := db.NamedQuery("INSERT INTO pools (address, lt, totalSupply, type, tradeFee, asset0Address, asset1Address, asset0Type, asset1Type, asset0Name, asset1Name, asset0Symbol, asset1Symbol, asset0Decimal, asset1Decimal, lastPrice, asset0Image, asset1Image, asset0Reserve, asset1Reserve, asset0Code, asset1Code, asset0TokenWalletCode, asset1TokenWalletCode, asset0Vault, asset1Vault, jettonWalletCode, asset1VaultJettonWalletAddress, privateKeyOfG, gAddr) VALUES (:address, :lt, :totalSupply, :type, :tradeFee, :asset0Address, :asset1Address, :asset0Type, :asset1Type, :asset0Name, :asset1Name, :asset0Symbol, :asset1Symbol, :asset0Decimal, :asset1Decimal, :lastPrice, :asset0Image, :asset1Image, :asset0Reserve, :asset1Reserve, :asset0Code, :asset1Code, :asset0TokenWalletCode, :asset1TokenWalletCode, :asset0Vault, :asset1Vault, :jettonWalletCode, :asset1VaultJettonWalletAddress, :privateKeyOfG, :gAddr)", p)
 	if err != nil {
 		return err
 	}
@@ -396,6 +441,19 @@ func (p *Pool) SaveToDB(db *sqlx.DB) error {
 
 func (p *Pool) UpdateReserves(db *sqlx.DB) error {
 	row, err := db.NamedQuery("UPDATE pools SET asset0Reserve = :asset0Reserve, asset1Reserve = :asset1Reserve, lt = :lt WHERE address = :address", p)
+	if err != nil {
+		return err
+	}
+
+	return row.Close()
+}
+
+func (p *Pool) UpdateG(db *sqlx.DB) error {
+	p.Asset1VaultJettonWalletAddress.Valid = true
+	p.PrivateKeyOfG.Valid = true
+	p.GAddr.Valid = true
+
+	row, err := db.NamedQuery("UPDATE pools SET asset1VaultJettonWalletAddress = :asset1VaultJettonWalletAddress, privateKeyOfG = :privateKeyOfG, gAddr = :gAddr WHERE address = :address", p)
 	if err != nil {
 		return err
 	}

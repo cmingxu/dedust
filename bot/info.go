@@ -44,6 +44,24 @@ func BotAddress(publicKey ed25519.PublicKey) *address.Address {
 	return botAddress(publicKey)
 }
 
+func GAddress(publicKey ed25519.PublicKey, botAddr *address.Address) *address.Address {
+	return gAddress(publicKey, botAddr)
+}
+
+func gAddress(publicKey ed25519.PublicKey, botAddr *address.Address) *address.Address {
+	stateInit := &tlb.StateInit{
+		Code: getGCode(),
+		Data: getGData(publicKey, botAddr),
+	}
+
+	stateCell, err := tlb.ToCell(stateInit)
+	if err != nil {
+		panic(err)
+	}
+
+	return address.NewAddress(0, 0, stateCell.Hash())
+}
+
 func botAddress(publicKey ed25519.PublicKey) *address.Address {
 	stateInit := &tlb.StateInit{
 		Code: getCode(),
@@ -56,6 +74,13 @@ func botAddress(publicKey ed25519.PublicKey) *address.Address {
 	}
 
 	return address.NewAddress(0, 0, stateCell.Hash())
+}
+
+func GetSeqno(ctx context.Context,
+	client ton.APIClientWrapped,
+	masterBlock *ton.BlockIDExt,
+	addr *address.Address) (uint64, error) {
+	return getSeqno(ctx, client, masterBlock, addr)
 }
 
 func getSeqno(ctx context.Context,

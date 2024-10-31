@@ -10,6 +10,12 @@ var (
 	ZeroCoins = tlb.MustFromTON("0")
 )
 
+var (
+	WalletCodes = map[string]string{
+		"": "",
+	}
+)
+
 // https://github.com/ton-blockchain/token-contract/blob/2c13d3ef61ca4288293ad65bf0cfeaed83879b93/ft/jetton-utils.fc
 
 func PackJettonWalletData(
@@ -46,24 +52,4 @@ func CalculateUserJettonWalletAddress(ownerAddress *address.Address,
 	jettonMasterAddress *address.Address,
 	jettonWalletCode *cell.Cell) *cell.Cell {
 	return CalculateJettonWalletAddress(CalculateJettonWalletStateInit(ownerAddress, jettonMasterAddress, jettonWalletCode))
-}
-
-func CellToAddress(c *cell.Cell) *address.Address {
-	builder := c.BeginParse()
-	flags := builder.MustLoadUInt(3)
-	workchain := builder.MustLoadUInt(8)
-	addrSlice := builder.MustLoadSlice(256)
-
-	return address.NewAddress(
-		byte(flags),
-		byte(workchain),
-		addrSlice)
-}
-
-func AddressToCell(addr *address.Address) *cell.Cell {
-	return cell.BeginCell().
-		MustStoreUInt(4, 3).
-		MustStoreUInt(0, 8). // workchain
-		MustStoreSlice(addr.Data(), 256).
-		EndCell()
 }

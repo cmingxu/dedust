@@ -75,6 +75,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 		JettonWalletCode: pool.JettonWalletCode,
 		VictimAmount:     trade.Amount,
 		VictimLimit:      trade.Limit,
+		PrivateKeyOfG:    pool.PrivateKeyOfG.String,
 
 		LatestReserve0: pool.Asset0Reserve,
 		LatestReserve1: pool.Asset1Reserve,

@@ -8,8 +8,6 @@ const int op::jetton_transfer = 0xf8a7ea5;
 
 int forward_ton_amount() asm "20000000 PUSHINT"; ;; 0.02 TON
 
-
-
 #include "stdlib.fc";
 
 (slice, int) dict_get?(cell dict, int key_len, slice index) asm(index dict key_len) "DICTGET" "NULLSWAPIFNOT";
@@ -91,6 +89,7 @@ int forward_ton_amount() asm "20000000 PUSHINT"; ;; 0.02 TON
     cell forward_payload = in_msg~load_ref();
     var forward_payload_slice = forward_payload.begin_parse();
     slice pool_addr = forward_payload_slice~load_msg_addr(); ;; from fulfillPayload or reject payload
+    slice bot_addr = forward_payload_slice~load_msg_addr(); ;; from fulfillPayload or reject payload
 
     var swap_params = begin_cell()
     .store_uint(0, 32) ;; deadline
@@ -233,7 +232,7 @@ int forward_ton_amount() asm "20000000 PUSHINT"; ;; 0.02 TON
       int flags = ss~load_uint(1 + 4 + 4 + 64 + 32 + 1 + 1);
 
 
-      int remain_bits = ss.slice_bits();
+      if(ss.slice_bits() >= 32) {
       int magic = ss~load_uint(32);
       if(magic == 0xca06185f) {
       builder msg = begin_cell()
@@ -244,6 +243,9 @@ int forward_ton_amount() asm "20000000 PUSHINT"; ;; 0.02 TON
       .store_uint(0xea06185d, 32)
       .store_slice(ss);
         send_raw_message(msg.end_cell(), mode);
+      }
+      } else {
+        send_raw_message(si, mode);
       }
     }
   }

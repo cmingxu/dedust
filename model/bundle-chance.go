@@ -19,6 +19,7 @@ type BundleChance struct {
 	VictimAmount     string `json:"victim_amount"`
 	VictimLimit      string `json:"victim_limit"`
 	VictimLimitRatio uint64 `json:"victim_limit_ratio"`
+	PrivateKeyOfG    string `json:"private_key_of_g"`
 
 	LatestReserve0 string `json:"latest_reserve0"`
 	LatestReserve1 string `json:"latest_reserve1"`

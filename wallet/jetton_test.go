@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/cmingxu/dedust/utils"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/tvm/cell"
 )
@@ -37,14 +38,14 @@ func TestCalculateUserJettonWalletAddress(t *testing.T) {
 	println("vault : ", ownerAddress.String())
 	println("jetton master: ", jettonMasterAddress.String())
 	println("jetton wallet: ", jettonWalletAddress.String())
-	println("1generated wallet addr:", CellToAddress(jettonWalletAddrCell).String())
+	println("generated wallet addr:", utils.CellToAddress(jettonWalletAddrCell).String())
 
 	//println("jetton wallet cell: ", jettonWalletAddrCell.Dump())
 	//println("state init cell: ", stateInit.Dump())
 	t.Log(hex.EncodeToString(stateInit.Hash()))
 	t.Log(len(stateInit.Hash()))
 
-	if bytes.Equal(CellToAddress(jettonWalletAddrCell).Data(),
+	if bytes.Equal(utils.CellToAddress(jettonWalletAddrCell).Data(),
 		jettonWalletAddress.Data()) {
 		t.Error("no equal")
 	}
