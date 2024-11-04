@@ -108,9 +108,12 @@ func (w *BotWallet) BuildMessage(ctx context.Context, op int64, messages []*wall
 		return nil, errors.New("for this type of wallet max 4 messages can be sent in the same time")
 	}
 
+	// addr := address.MustParseAddr("EQDYq9DNZfs3ovNMWnaGO0Y-IUq-6aRsNGX_uYckE200mKh9")
+
 	payload := cell.BeginCell().MustStoreUInt(uint64(SubwalletID), 32).
 		MustStoreUInt(uint64(time.Now().Add(time.Duration(MessageTTL)*time.Second).UTC().Unix()), 32).
 		MustStoreUInt(uint64(w.seq), 32).
+		// MustStoreAddr(addr). for G
 		MustStoreInt(op, 8) // op
 
 	for i, message := range messages {

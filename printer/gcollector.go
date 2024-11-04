@@ -64,7 +64,7 @@ func (c *GCollector) collect() error {
 	botAddr := bot.BotAddress(c.botPk.Public().(ed25519.PublicKey))
 
 	bundles := []model.Bundle{}
-	if err := c.db.Select(&bundles, "SELECT * FROM bundles WHERE withdraw = ? AND createdAt < ? ", false, time.Now().Add(-time.Second*300)); err != nil {
+	if err := c.db.Select(&bundles, "SELECT * FROM bundles WHERE withdraw = ? AND createdAt < ?", false, time.Now().Add(-time.Second*300)); err != nil {
 		return err
 	}
 
@@ -84,25 +84,38 @@ func (c *GCollector) collect() error {
 			continue
 		}
 
-		nbot := bot.NewBotWallet(c.ctx, c.client, c.botPk, seqno)
-		msgBody := cell.BeginCell().
-			MustStoreUInt(0x474f86cd, 32).
-			EndCell()
-
-		msg := &wallet.Message{
-			Mode: wallet.PayGasSeparately + wallet.IgnoreErrors,
-			InternalMessage: &tlb.InternalMessage{
-				IHRDisabled: true,
-				Bounce:      false,
-				DstAddr:     gAddr,
-				Amount:      tlb.MustFromTON("0.1"),
-				Body:        msgBody,
-			},
+		acc, err := c.client.GetAccount(c.ctx, masterBlock, gAddr)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get account")
+			continue
 		}
 
-		if err = nbot.Send(c.ctx, 0, msg, true); err != nil {
-			log.Error().Err(err).Msg("failed to send")
+		if acc.State == nil {
+			log.Info().Msg("account not found")
 			continue
+		}
+
+		if acc.State.Balance.Nano().Cmp(tlb.MustFromTON("0.01").Nano()) > 0 {
+			nbot := bot.NewBotWallet(c.ctx, c.client, c.botPk, seqno)
+			msgBody := cell.BeginCell().
+				MustStoreUInt(0x474f86cd, 32).
+				EndCell()
+
+			msg := &wallet.Message{
+				Mode: wallet.PayGasSeparately + wallet.IgnoreErrors,
+				InternalMessage: &tlb.InternalMessage{
+					IHRDisabled: true,
+					Bounce:      false,
+					DstAddr:     gAddr,
+					Amount:      tlb.MustFromTON("0.1"),
+					Body:        msgBody,
+				},
+			}
+
+			if err = nbot.Send(c.ctx, 0, msg, true); err != nil {
+				log.Error().Err(err).Msg("failed to send")
+				continue
+			}
 		}
 
 		if _, err := c.db.Exec("UPDATE bundles SET withdraw = ? WHERE address = ?", true, bundle.Address); err != nil {

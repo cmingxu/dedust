@@ -18,30 +18,39 @@ import (
 )
 
 var (
+	terminator = tlb.MustFromTON("100").Nano()
+)
+
+var (
 	MinmumTradeAmount = big.NewInt(1 * 1e9)
 	MinGasCost        = tlb.MustFromTON("0.015")
 
-	Zero     = big.NewInt(0)
-	BN1TON   = tlb.MustFromTON("1").Nano()
-	BN2TON   = tlb.MustFromTON("2").Nano()
-	BN3TON   = tlb.MustFromTON("3").Nano()
-	BN5TON   = tlb.MustFromTON("5").Nano()
-	BN7TON   = tlb.MustFromTON("7").Nano()
-	BN10TON  = tlb.MustFromTON("10").Nano()
-	BN20TON  = tlb.MustFromTON("20").Nano()
-	BN50TON  = tlb.MustFromTON("50").Nano()
-	BN75TON  = tlb.MustFromTON("75").Nano()
-	BN100TON = tlb.MustFromTON("100").Nano()
-	BN120TON = tlb.MustFromTON("120").Nano()
-	BN150TON = tlb.MustFromTON("150").Nano()
-	BN180TON = tlb.MustFromTON("180").Nano()
-	BN200TON = tlb.MustFromTON("200").Nano()
-	BN250TON = tlb.MustFromTON("250").Nano()
-	BN275TON = tlb.MustFromTON("275").Nano()
-	BN300TON = tlb.MustFromTON("300").Nano()
-	BN400TON = tlb.MustFromTON("400").Nano()
-	BN500TON = tlb.MustFromTON("500").Nano()
-	BN600TON = tlb.MustFromTON("600").Nano()
+	Zero      = big.NewInt(0)
+	BN1TON    = tlb.MustFromTON("1").Nano()
+	BN2TON    = tlb.MustFromTON("2").Nano()
+	BN3TON    = tlb.MustFromTON("3").Nano()
+	BN5TON    = tlb.MustFromTON("5").Nano()
+	BN7TON    = tlb.MustFromTON("7").Nano()
+	BN10TON   = tlb.MustFromTON("10").Nano()
+	BN20TON   = tlb.MustFromTON("20").Nano()
+	BN50TON   = tlb.MustFromTON("50").Nano()
+	BN75TON   = tlb.MustFromTON("75").Nano()
+	BN100TON  = tlb.MustFromTON("100").Nano()
+	BN120TON  = tlb.MustFromTON("120").Nano()
+	BN150TON  = tlb.MustFromTON("150").Nano()
+	BN180TON  = tlb.MustFromTON("180").Nano()
+	BN200TON  = tlb.MustFromTON("200").Nano()
+	BN250TON  = tlb.MustFromTON("250").Nano()
+	BN275TON  = tlb.MustFromTON("275").Nano()
+	BN300TON  = tlb.MustFromTON("300").Nano()
+	BN400TON  = tlb.MustFromTON("400").Nano()
+	BN500TON  = tlb.MustFromTON("500").Nano()
+	BN600TON  = tlb.MustFromTON("600").Nano()
+	BN800TON  = tlb.MustFromTON("800").Nano()
+	BN1000TON = tlb.MustFromTON("1000").Nano()
+	BN1200TON = tlb.MustFromTON("1200").Nano()
+	BN1500TON = tlb.MustFromTON("1500").Nano()
+	BN2000TON = tlb.MustFromTON("2000").Nano()
 )
 
 var (
@@ -72,7 +81,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 		PoolAddress:      pool.Address,
 		Asset1Address:    pool.Asset1Address,
 		Asset1Vault:      pool.Asset1Vault,
-		JettonWalletCode: pool.JettonWalletCode,
+		JettonWalletCode: pool.JettonWalletCode.String,
 		VictimAmount:     trade.Amount,
 		VictimLimit:      trade.Limit,
 		PrivateKeyOfG:    pool.PrivateKeyOfG.String,
@@ -135,7 +144,6 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 
 	pairs := make([]InOut, 0)
 	initial := tlb.MustFromTON("2").Nano()
-	terminator := tlb.MustFromTON("200").Nano()
 	step := new(big.Int).Div(new(big.Int).Sub(terminator, initial), big.NewInt(200))
 
 	model := NewModel(x, y, limit, tonAmount)
@@ -237,27 +245,27 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 
 	// 要和 reserve0（TON） 的数量比较，成比例
 	pairsAreProfitableEnough = lo.Filter(pairsAreProfitableEnough, func(pair InOut, index int) bool {
-		if checkInRange(pair.BotIn, BN200TON, BN400TON, x, BN400TON) {
+		if checkInRange(pair.BotIn, BN200TON, BN400TON, x, BN2000TON) {
 			return true
 		}
 
-		if checkInRange(pair.BotIn, BN100TON, BN200TON, x, BN300TON) {
+		if checkInRange(pair.BotIn, BN100TON, BN200TON, x, BN1200TON) {
 			return true
 		}
 
-		if checkInRange(pair.BotIn, BN75TON, BN100TON, x, BN200TON) {
+		if checkInRange(pair.BotIn, BN75TON, BN100TON, x, BN1000TON) {
 			return true
 		}
 
-		if checkInRange(pair.BotIn, BN50TON, BN100TON, x, BN150TON) {
+		if checkInRange(pair.BotIn, BN50TON, BN100TON, x, BN1000TON) {
 			return true
 		}
 
-		if checkInRange(pair.BotIn, BN20TON, BN50TON, x, BN120TON) {
+		if checkInRange(pair.BotIn, BN20TON, BN50TON, x, BN300TON) {
 			return true
 		}
 
-		if checkInRange(pair.BotIn, BN10TON, BN20TON, x, BN50TON) {
+		if checkInRange(pair.BotIn, BN10TON, BN20TON, x, BN100TON) {
 			return true
 		}
 

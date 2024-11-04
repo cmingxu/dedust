@@ -36,6 +36,7 @@ func JettonTransferFromG(ctx context.Context,
 	}
 
 	fmt.Println("Dest address:", destAddr.String())
+	fmt.Println("jetton wallet of G", jettonWalletOfGAddr.String())
 	fmt.Println("G address:", gAddr.String())
 	fmt.Println("G balance:", account.State.Balance)
 	seqno, err := getSeqno(ctx, client, masterBlock, gAddr)

@@ -122,11 +122,11 @@ type Pool struct {
 	Asset0Reserve string    `json:"asset0Reserve" db:"asset0Reserve"`
 	Asset1Reserve string    `json:"asset1Reserve" db:"asset1Reserve"`
 
-	Asset0Code            string `json:"asset0Code" db:"asset0Code"`
-	Asset0TokenWalletCode string `json:"asset0TokenWalletCode" db:"asset0TokenWalletCode"`
-	Asset1Code            string `json:"asset1Code" db:"asset1Code"`
-	Asset1TokenWalletCode string `json:"asset1TokenWalletCode" db:"asset1TokenWalletCode"`
-	JettonWalletCode      string `json:"jettonWalletCode" db:"jettonWalletCode"`
+	Asset0Code            string         `json:"asset0Code" db:"asset0Code"`
+	Asset0TokenWalletCode string         `json:"asset0TokenWalletCode" db:"asset0TokenWalletCode"`
+	Asset1Code            string         `json:"asset1Code" db:"asset1Code"`
+	Asset1TokenWalletCode string         `json:"asset1TokenWalletCode" db:"asset1TokenWalletCode"`
+	JettonWalletCode      sql.NullString `json:"jettonWalletCode" db:"jettonWalletCode"`
 
 	Asset0Vault string `json:"asset0Vault" db:"asset0Vault"`
 	Asset1Vault string `json:"asset1Vault" db:"asset1Vault"`
@@ -359,7 +359,7 @@ NEXT:
 			return fmt.Errorf("asset1 token wallet code is nil")
 		}
 
-		p.JettonWalletCode = base64.StdEncoding.EncodeToString(acc.Code.ToBOC())
+		p.JettonWalletCode = sql.NullString{Valid: true, String: base64.StdEncoding.EncodeToString(acc.Code.ToBOC())}
 		p.Asset1TokenWalletCode = base64.StdEncoding.EncodeToString(acc.Code.Hash())
 		log.Debug().Msgf("pool %s, asset1addr: %s, token wallet %s code: %s",
 			p.Address, p.Asset1Address, tokenWallet.Address().String(), p.Asset1TokenWalletCode)
