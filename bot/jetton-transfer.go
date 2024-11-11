@@ -45,7 +45,7 @@ func JettonTransferFromG(ctx context.Context,
 	}
 	fmt.Println("Bot seqno:", seqno)
 
-	gWallet := NewGWallet(ctx, client, pkOfG, botAddr, seqno)
+	gWallet := NewWallet(ctx, client, G, pkOfG, botAddr, seqno)
 
 	msg, err := gWallet.BuildJettonTransfer(jettonWalletOfGAddr, destAddr, amount, tlb.MustFromTON("0.1"))
 	if err != nil {
@@ -67,7 +67,7 @@ type TransferPayload struct {
 	ForwardPayload      *cell.Cell       `tlb:"either . ^"`
 }
 
-func (w *BotWallet) BuildJettonTransfer(jettonWalletAddr *address.Address,
+func (w *Wallet) BuildJettonTransfer(jettonWalletAddr *address.Address,
 	destAddr *address.Address,
 	jettonAmount tlb.Coins, amountForwardTON tlb.Coins) (_ *wallet.Message, err error) {
 	body, err := w.buildTransferPayloadV2(destAddr, nil, jettonAmount, amountForwardTON, nil, nil)
@@ -87,7 +87,7 @@ func (w *BotWallet) BuildJettonTransfer(jettonWalletAddr *address.Address,
 	}, nil
 }
 
-func (w *BotWallet) buildTransferPayloadV2(to, responseTo *address.Address, amountCoins, amountForwardTON tlb.Coins, payloadForward, customPayload *cell.Cell) (*cell.Cell, error) {
+func (w *Wallet) buildTransferPayloadV2(to, responseTo *address.Address, amountCoins, amountForwardTON tlb.Coins, payloadForward, customPayload *cell.Cell) (*cell.Cell, error) {
 	if payloadForward == nil {
 		payloadForward = cell.BeginCell().EndCell()
 	}

@@ -35,7 +35,7 @@ func CollectG(
 
 	fmt.Println("G seqno:", seqno)
 
-	botWallet := NewBotWallet(ctx, client, botPk, seqno)
+	botWallet := NewWallet(ctx, client, Bot, botPk, nil, seqno)
 	msgBody := cell.BeginCell().
 		MustStoreUInt(0x474f86cd, 32).
 		EndCell()

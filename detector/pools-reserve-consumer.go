@@ -46,7 +46,18 @@ func (d *Detector) PoolReserveConsumer(ctx context.Context) error {
 				go func() {
 					if err := utils.TimeitReturnError(fmt.Sprintf("update pool reserve: %s %d",
 						pool.Address, payout.Lt), func() error {
-						return d.updatePoolReserve(ctx, pool, payout.AccountId, payout.Lt)
+						var err error
+						err = d.updatePoolReserve(ctx, pool, payout.AccountId, payout.Lt)
+						if err != nil {
+							time.Sleep(time.Second * 1)
+							err = d.updatePoolReserve(ctx, pool, payout.AccountId, payout.Lt)
+							if err != nil {
+								time.Sleep(time.Second * 3)
+								err = d.updatePoolReserve(ctx, pool, payout.AccountId, payout.Lt)
+							}
+						}
+
+						return err
 					}); err != nil {
 						log.Error().Err(err).Msg("failed to update pool reserve")
 					}

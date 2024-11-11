@@ -39,7 +39,7 @@ func Bundle(
 		return err
 	}
 
-	botWallet := NewBotWallet(ctx, client, botprivateKey, seqno)
+	botWallet := NewWallet(ctx, client, Bot, botprivateKey, nil, seqno)
 	var pk ed25519.PrivateKey
 
 	if os.Getenv("PKOFG") != "" {

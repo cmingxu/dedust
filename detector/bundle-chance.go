@@ -18,10 +18,6 @@ import (
 )
 
 var (
-	terminator = tlb.MustFromTON("100").Nano()
-)
-
-var (
 	MinmumTradeAmount = big.NewInt(1 * 1e9)
 	MinGasCost        = tlb.MustFromTON("0.015")
 
@@ -144,7 +140,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 
 	pairs := make([]InOut, 0)
 	initial := tlb.MustFromTON("2").Nano()
-	step := new(big.Int).Div(new(big.Int).Sub(terminator, initial), big.NewInt(200))
+	step := new(big.Int).Div(new(big.Int).Sub(d.terminiator.Nano(), initial), big.NewInt(200))
 
 	model := NewModel(x, y, limit, tonAmount)
 	log.Debug().Msgf("trade in: %s", model.TradeIn.String())
@@ -245,35 +241,35 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 
 	// 要和 reserve0（TON） 的数量比较，成比例
 	pairsAreProfitableEnough = lo.Filter(pairsAreProfitableEnough, func(pair InOut, index int) bool {
-		if checkInRange(pair.BotIn, BN200TON, BN400TON, x, BN2000TON) {
-			return true
-		}
+		return new(big.Int).Div(x, pair.BotIn).Cmp(big.NewInt(10)) > 0
 
-		if checkInRange(pair.BotIn, BN100TON, BN200TON, x, BN1200TON) {
-			return true
-		}
+		//if checkInRserve0Range(pair.BotIn, BN200TON, BN400TON, x, BN2000TON) {
+		//	return true
+		//}
 
-		if checkInRange(pair.BotIn, BN75TON, BN100TON, x, BN1000TON) {
-			return true
-		}
+		//if checkInRserve0Range(pair.BotIn, BN100TON, BN200TON, x, BN1200TON) {
+		//	return true
+		//}
 
-		if checkInRange(pair.BotIn, BN50TON, BN100TON, x, BN1000TON) {
-			return true
-		}
+		//if checkInRserve0Range(pair.BotIn, BN75TON, BN100TON, x, BN1000TON) {
+		//	return true
+		//}
 
-		if checkInRange(pair.BotIn, BN20TON, BN50TON, x, BN300TON) {
-			return true
-		}
+		//if checkInRserve0Range(pair.BotIn, BN50TON, BN100TON, x, BN1000TON) {
+		//	return true
+		//}
 
-		if checkInRange(pair.BotIn, BN10TON, BN20TON, x, BN100TON) {
-			return true
-		}
+		//if checkInRserve0Range(pair.BotIn, BN20TON, BN50TON, x, BN300TON) {
+		//	return true
+		//}
 
-		if pair.BotIn.Cmp(BN10TON) < 0 {
-			return true
-		}
+		//if checkInRserve0Range(pair.BotIn, BN10TON, BN20TON, x, BN100TON) {
+		//	return true
+		//}
 
-		return false
+		//if pair.BotIn.Cmp(BN10TON) < 0 {
+		//	return true
+		//}
 	})
 
 	d.p("$ pairsAreProfitableEnough(after range filter): %d\n", len(pairsAreProfitableEnough))
@@ -305,7 +301,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	return chance, nil
 }
 
-func checkInRange(a, l, h, actualReserve, reserveL *big.Int) bool {
+func checkInRserve0Range(a, l, h, actualReserve, reserveL *big.Int) bool {
 	return a.Cmp(l) >= 0 && a.Cmp(h) < 0 && actualReserve.Cmp(reserveL) > 0
 }
 

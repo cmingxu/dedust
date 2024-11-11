@@ -12,6 +12,17 @@ import (
 	"github.com/xssnick/tonutils-go/liteclient"
 )
 
+var LiteserverIpsCmd = &cli2.Command{
+	Name: "liteserver-ips",
+	Flags: []cli2.Flag{
+		&tonConfig,
+	},
+	Description: "to get list all ip of ton-config",
+	Action: func(c *cli2.Context) error {
+		return LiteserverIps(c)
+	},
+}
+
 func LiteserverIps(c *cli2.Context) error {
 	config, err := liteclient.GetConfigFromFile(c.String("ton-config"))
 	if err != nil {

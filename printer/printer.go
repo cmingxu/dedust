@@ -27,7 +27,12 @@ import (
 	"github.com/xssnick/tonutils-go/ton/wallet"
 )
 
+const TONCENTER_API_KEY = "a446bd61ab5fd0459d3c35a558c6890ad2530c0506632776cc83e15b9f1befc8"
 const TOKEN = "AEETAB4AU6BMELIAAAADMMZHBQOIVYFMRL7QZ77HCXATNHS5PF6CIJQJNAQRLC4OG73V2VQ"
+
+var (
+	ShardId = tlb.ShardID(0xe000000000000000)
+)
 
 var (
 	DCM_ADDR = address.MustParseAddr("UQCwSxqefElovEPlpZ8bIEL_KXqWuqoOhwb65uYjos9bCDcM")
@@ -42,6 +47,7 @@ type Printer struct {
 	working    bool
 	conn       *websocket.Conn
 	wsEndpoint string
+	tonConfig  string
 
 	seqno   uint64
 	balance tlb.Coins
@@ -68,9 +74,7 @@ type Printer struct {
 }
 
 func NewPrinter(
-	ctx context.Context,
-	pool *liteclient.ConnectionPool,
-	client ton.APIClientWrapped,
+	tonConfig string,
 	addr *address.Address,
 	botprivateKey ed25519.PrivateKey,
 	wsEndpoint string,
@@ -83,12 +87,10 @@ func NewPrinter(
 	mysql string,
 ) (*Printer, error) {
 	p := &Printer{
+		tonConfig:     tonConfig,
 		wsEndpoint:    wsEndpoint,
 		botPrivateKey: botprivateKey,
 		addr:          addr,
-		pool:          pool,
-		client:        client,
-		ctx:           ctx,
 		sendCnt:       sendCnt,
 		useTonAPI:     useTonAPI,
 		useTonCenter:  useTonCenter,
@@ -96,6 +98,13 @@ func NewPrinter(
 	}
 
 	var err error
+	p.pool, p.ctx, err = utils.GetConnectionPool(tonConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	p.client = utils.GetAPIClient(p.pool)
+
 	l, err := tlb.FromTON(limit)
 	if err != nil {
 		return nil, err
@@ -162,6 +171,9 @@ func (p *Printer) Run() error {
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 
+	reconnectPoolTicker := time.NewTicker(1000000000 * time.Second)
+	defer reconnectPoolTicker.Stop()
+
 	timer := time.NewTimer(6000000 * time.Second)
 	for {
 		select {
@@ -184,7 +196,7 @@ func (p *Printer) Run() error {
 					poolAddr.String(), botInAmount.String(), limit.String(), nextLimit.String(),
 					deadline.Format(time.RFC3339Nano))
 
-				nbot := bot.NewBotWallet(p.ctx, p.client, p.botPrivateKey, p.seqno)
+				nbot := bot.NewWallet(p.ctx, p.client, bot.Bot, p.botPrivateKey, nil, p.seqno)
 
 				pk, err := hex.DecodeString(chance.PrivateKeyOfG)
 				if err != nil {
@@ -257,6 +269,13 @@ func (p *Printer) Run() error {
 			if p.working {
 				p.working = false
 			}
+
+		case <-reconnectPoolTicker.C:
+			log.Debug().Msg("reconnect pool now")
+			if !p.working {
+				p.pool, p.ctx, err = utils.Reconnect(p.tonConfig)
+				p.client = utils.GetAPIClient(p.pool)
+			}
 		case <-ticker.C:
 			fmt.Printf("[+] T: %s B: %s, S: %d, W: %t\n",
 				time.Now().Format(time.Kitchen),
@@ -318,7 +337,7 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 	}
 
 	profit := stringToBigInt(chance.Profit)
-	if profit.Cmp(tlb.MustFromTON("0.1").Nano()) < 0 {
+	if profit.Cmp(tlb.MustFromTON("0.2").Nano()) < 0 {
 		return false
 	}
 
@@ -326,19 +345,19 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 		return true
 	}
 
-	if st(in, "20") && bt(profit, "0.12") {
+	if st(in, "20") && bt(profit, "0.2") {
 		return true
 	}
 
-	if st(in, "50") && bt(profit, "0.2") {
+	if st(in, "50") && bt(profit, "0.4") {
 		return true
 	}
 
-	if st(in, "100") && bt(profit, "0.4") {
+	if st(in, "100") && bt(profit, "1") {
 		return true
 	}
 
-	if st(in, "150") && bt(profit, "0.8") {
+	if st(in, "150") && bt(profit, "1.1") {
 		return true
 	}
 
@@ -363,7 +382,7 @@ func stringToBigInt(s string) *big.Int {
 
 func (p *Printer) SendWithANDL(
 	chance *model.BundleChance,
-	nbot *bot.BotWallet,
+	nbot *bot.Wallet,
 	msgs []*wallet.Message,
 ) error {
 	var err error
@@ -417,7 +436,7 @@ func (p *Printer) SendWithANDL(
 }
 
 func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
-	nbot *bot.BotWallet,
+	nbot *bot.Wallet,
 	msgs []*wallet.Message) error {
 	c := context.Background()
 
@@ -461,7 +480,7 @@ func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 	return nil
 }
 func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
-	nbot *bot.BotWallet,
+	nbot *bot.Wallet,
 	msgs []*wallet.Message) error {
 	c := context.Background()
 
@@ -496,6 +515,7 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Api-Key", TONCENTER_API_KEY)
 	resp, err := p.httpClt.Do(req)
 	if err != nil {
 		return err
@@ -506,7 +526,7 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 	return nil
 }
 
-func (p *Printer) BuildAuxTransfer(bw *bot.BotWallet, amount tlb.Coins, comment string) (*wallet.Message, error) {
+func (p *Printer) BuildAuxTransfer(bw *bot.Wallet, amount tlb.Coins, comment string) (*wallet.Message, error) {
 	return bw.BuildTransfer(DCM_ADDR, amount, true, comment)
 }
 

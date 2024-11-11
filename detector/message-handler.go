@@ -100,6 +100,7 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 		}
 
 		trade.WalletType = model.WalletTypeBot
+		d.p("Unknown WalletType: (%s) %s\n", trade.WalletType, msg.DstAddr.String())
 		goto FINISH
 
 	CORRECT:
@@ -137,6 +138,7 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 			return errors.Wrap(err, "failed to decode DedustNativeSwap")
 		}
 		log.Debug().Msgf("(BUY) NativeSwap: %+v", nativeSwap)
+		d.p("NativeSwap: %+v\n", nativeSwap)
 
 		trade.TradeType = model.TradeTypeBuy
 		trade.SwapType = model.SwapTypeNative

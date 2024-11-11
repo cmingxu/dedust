@@ -1,6 +1,8 @@
 package wallet
 
-import "github.com/xssnick/tonutils-go/tvm/cell"
+import (
+	"github.com/xssnick/tonutils-go/tvm/cell"
+)
 
 type V4R2Header struct {
 	Sig       []byte     `tlb:"bits 512"`

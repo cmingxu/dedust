@@ -12,26 +12,28 @@ import (
 
 func Transfer(ctx context.Context,
 	client ton.APIClientWrapped,
-	botprivateKey ed25519.PrivateKey,
+	privateKey ed25519.PrivateKey,
+	botType BotType,
 	destAddr *address.Address,
 	amount tlb.Coins,
 ) error {
-	botAddr := botAddress(botprivateKey.Public().(ed25519.PublicKey))
+	addr := WalletAddress(privateKey.Public().(ed25519.PublicKey), nil, botType)
 
 	masterBlock, err := client.GetMasterchainInfo(ctx)
 	if err != nil {
 		return err
 	}
 
-	account, err := client.WaitForBlock(masterBlock.SeqNo).GetAccount(ctx, masterBlock, botAddr)
+	account, err := client.WaitForBlock(masterBlock.SeqNo).GetAccount(ctx, masterBlock, addr)
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Dest address:", destAddr.String())
-	fmt.Println("Bot address:", botAddr.String())
-	fmt.Println("Bot balance:", account.State.Balance)
-	seqno, err := getSeqno(ctx, client, masterBlock, botAddr)
+	fmt.Println("Address:", addr.String())
+	fmt.Println("Type", botType)
+	fmt.Println("Balance:", account.State.Balance)
+	seqno, err := getSeqno(ctx, client, masterBlock, addr)
 	if err != nil {
 		return err
 	}
@@ -41,6 +43,6 @@ func Transfer(ctx context.Context,
 		return fmt.Errorf("not enough balance")
 	}
 
-	botWallet := NewBotWallet(ctx, client, botprivateKey, seqno)
-	return botWallet.TransferNoBounce(ctx, destAddr, amount, "you deserved it", true)
+	wallet := NewWallet(ctx, client, botType, privateKey, nil, seqno)
+	return wallet.TransferNoBounce(ctx, destAddr, amount, "(^)", true)
 }

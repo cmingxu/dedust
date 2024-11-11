@@ -12,6 +12,22 @@ import (
 	cli2 "github.com/urfave/cli/v2"
 )
 
+var (
+	bootstrapCmd = &cli2.Command{
+		Name: "bootstrap",
+		Flags: []cli2.Flag{
+			&host,
+			&port,
+			&user,
+			&password,
+			&database,
+		},
+		Action: func(c *cli2.Context) error {
+			return bootstrap(c)
+		},
+	}
+)
+
 func bootstrap(c *cli2.Context) error {
 	db, err := sqlx.Connect("mysql", utils.ConstructDSN(c))
 	if err != nil {

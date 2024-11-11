@@ -2,7 +2,6 @@ package cli
 
 import (
 	"crypto/ed25519"
-	"time"
 
 	"github.com/cmingxu/dedust/bot"
 	"github.com/cmingxu/dedust/printer"
@@ -10,22 +9,42 @@ import (
 	cli2 "github.com/urfave/cli/v2"
 )
 
-func startPrinter(c *cli2.Context) error {
-	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+var printerCmd = &cli2.Command{
+	Name: "printer",
+	Flags: []cli2.Flag{
+		&tonConfig,
+		&walletSeed,
+		&wsEndpoint,
+		&printerOutPath,
+		&sendCnt,
+		&useTonAPI,
+		&useTonCenter,
+		&useANDL,
+		&limit,
+		&host,
+		&port,
+		&user,
+		&password,
+		&database,
+	},
+	Description: "to print money",
+	Action: func(c *cli2.Context) error {
+		return startPrinter(c)
+	},
+}
 
-	// establish connection to the server
-	pool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
-	if err != nil {
+func startPrinter(c *cli2.Context) error {
+	if err := utils.SetupLogger(c.String("loglevel")); err != nil {
 		return err
 	}
-	client := utils.GetAPIClientWithTimeout(pool, time.Second*10)
+
+	botWalletSeeds := MustLoadSeeds(c.String("wallet-seed"))
 
 	botprivateKey := pkFromSeed(botWalletSeeds)
-	botAddr := bot.BotAddress(botprivateKey.Public().(ed25519.PublicKey))
+	botAddr := bot.WalletAddress(botprivateKey.Public().(ed25519.PublicKey), nil, bot.Bot)
 
-	p, err := printer.NewPrinter(ctx,
-		pool,
-		client,
+	p, err := printer.NewPrinter(
+		c.String("ton-config"),
 		botAddr,
 		botprivateKey,
 		c.String("ws-endpoint"),

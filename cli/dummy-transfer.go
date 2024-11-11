@@ -10,8 +10,22 @@ import (
 	"github.com/xssnick/tonutils-go/tlb"
 )
 
-func buildTransferMessage(c *cli2.Context) error {
-	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+var dummyTransferCmd = &cli2.Command{
+	Name: "dummy-transfer",
+	Flags: []cli2.Flag{
+		&tonConfig,
+		&walletSeed,
+		&destAddr,
+		&amount,
+	},
+	Description: "generate base64 send message(external)",
+	Action: func(c *cli2.Context) error {
+		return dummyTransfer(c)
+	},
+}
+
+func dummyTransfer(c *cli2.Context) error {
+	botWalletSeeds := MustLoadSeeds(c.String("wallet-seed"))
 
 	// establish connection to the server
 	pool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))

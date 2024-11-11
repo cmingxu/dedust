@@ -32,11 +32,18 @@ type MPResponse struct {
 	InvolvedAccounts []string `json:"involved_accounts"`
 }
 
-func (r *MPResponse) String() string {
+func (r *MPResponse) ShortString() string {
 	hash := sha1.New()
 	hash.Write([]byte(r.Boc))
 	bocHash := hash.Sum(nil)
 	return fmt.Sprintf("boc: %s, involved accounts len: %d", hex.EncodeToString(bocHash), len(r.InvolvedAccounts))
+}
+
+func (r *MPResponse) String() string {
+	hash := sha1.New()
+	hash.Write([]byte(r.Boc))
+	bocHash := hash.Sum(nil)
+	return fmt.Sprintf("boc: %s, involved accounts len: %d %s", hex.EncodeToString(bocHash), len(r.InvolvedAccounts), strings.Join(r.InvolvedAccounts, ", "))
 }
 
 func (d *Detector) SubscribeTradeSignalFromTonAPIMemPool(ctx context.Context,

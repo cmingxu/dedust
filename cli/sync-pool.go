@@ -21,12 +21,33 @@ import (
 
 const DedustPoolAPI = "https://api.dedust.io/v2/pools"
 
+var (
+	syncPoolCmd = &cli2.Command{
+		Name: "sync-pool",
+		Flags: []cli2.Flag{
+			&host,
+			&port,
+			&user,
+			&password,
+			&database,
+			&tonConfig,
+			&walletSeed,
+		},
+		Action: func(c *cli2.Context) error {
+			if err := utils.SetupLogger(c.String("loglevel")); err != nil {
+				return err
+			}
+			return syncPool(c)
+		},
+	}
+)
+
 func syncPool(c *cli2.Context) error {
 	fmt.Println("Syncing pool...")
 
-	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+	botWalletSeeds := MustLoadSeeds(c.String("wallet-seed"))
 	pk := pkFromSeed(botWalletSeeds)
-	botAddr := bot.BotAddress(pk.Public().(ed25519.PublicKey))
+	botAddr := bot.WalletAddress(pk.Public().(ed25519.PublicKey), nil, bot.Bot)
 
 	db, err := sqlx.Connect("mysql", utils.ConstructDSN(c))
 	if err != nil {

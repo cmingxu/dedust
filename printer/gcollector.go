@@ -61,7 +61,7 @@ func (c *GCollector) Run() error {
 func (c *GCollector) collect() error {
 	log.Info().Msg("collecting now")
 
-	botAddr := bot.BotAddress(c.botPk.Public().(ed25519.PublicKey))
+	botAddr := bot.WalletAddress(c.botPk.Public().(ed25519.PublicKey), nil, bot.Bot)
 
 	bundles := []model.Bundle{}
 	if err := c.db.Select(&bundles, "SELECT * FROM bundles WHERE withdraw = ? AND createdAt < ?", false, time.Now().Add(-time.Second*300)); err != nil {
@@ -96,7 +96,7 @@ func (c *GCollector) collect() error {
 		}
 
 		if acc.State.Balance.Nano().Cmp(tlb.MustFromTON("0.01").Nano()) > 0 {
-			nbot := bot.NewBotWallet(c.ctx, c.client, c.botPk, seqno)
+			nbot := bot.NewWallet(c.ctx, c.client, bot.Bot, c.botPk, nil, seqno)
 			msgBody := cell.BeginCell().
 				MustStoreUInt(0x474f86cd, 32).
 				EndCell()

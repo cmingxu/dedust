@@ -14,42 +14,61 @@ import (
 func DedustSell(
 	ctx context.Context,
 	client ton.APIClientWrapped,
-	botprivateKey ed25519.PrivateKey,
+	privateKey ed25519.PrivateKey,
+	botType BotType,
 	jettonMasterAddr *address.Address,
 	dedustVaultAddr *address.Address,
 	poolAddr *address.Address,
 ) error {
-	botAddr := botAddress(botprivateKey.Public().(ed25519.PublicKey))
-	fmt.Println("Bot address:", botAddr.String())
+	addr := WalletAddress(privateKey.Public().(ed25519.PublicKey), nil, botType)
+	fmt.Println("Bot address:", addr.String())
 	fmt.Println("Jetton master address:", jettonMasterAddr.String())
 	fmt.Println("Dedust vault address:", dedustVaultAddr.String())
 	fmt.Println("Pool address:", poolAddr.String())
 
-	botJettonWalletAddr, jettonAmountOfBot, err := botJettonWalletAddrAndAmount(ctx,
+	jettonWalletAddr, jettonAmount, err := jettonWalletAddrAndAmount(ctx,
 		client,
 		jettonMasterAddr,
-		botAddr)
+		addr)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Bot jetton wallet address:", botJettonWalletAddr.String())
-	fmt.Println("Jetton amount of bot:", jettonAmountOfBot.String())
+	fmt.Println("Jetton wallet address:", jettonWalletAddr.String())
+	fmt.Println("Jetton amount:", jettonAmount.String())
 
-	botWallet := NewBotWallet(ctx, client, botprivateKey, 2)
-	msg := botWallet.BuildDedustSell(botJettonWalletAddr,
+	masterBlock, err := client.GetMasterchainInfo(ctx)
+	if err != nil {
+		return err
+	}
+
+	account, err := client.WaitForBlock(masterBlock.SeqNo).GetAccount(ctx, masterBlock, addr)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Address:", addr.String())
+	fmt.Println("Balance:", account.State.Balance)
+	seqno, err := getSeqno(ctx, client, masterBlock, addr)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Bot seqno:", seqno)
+
+	wallet := NewWallet(ctx, client, botType, privateKey, nil, seqno)
+	msg := wallet.BuildDedustSell(jettonWalletAddr,
 		dedustVaultAddr,
 		poolAddr,
-		jettonAmountOfBot,
+		jettonAmount,
 		tlb.MustFromTON("0.00001"), // ton limit expected
 	)
 
 	fmt.Println("Dedust sell message:", msg)
 
-	return botWallet.Send(ctx, 0, msg, true)
+	return wallet.Send(ctx, 0, msg, true)
 }
 
-func botJettonWalletAddrAndAmount(ctx context.Context,
+func jettonWalletAddrAndAmount(ctx context.Context,
 	client ton.APIClientWrapped,
 	jettonMasterAddr *address.Address,
 	botAddr *address.Address) (*address.Address, tlb.Coins, error) {

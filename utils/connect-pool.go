@@ -13,6 +13,8 @@ import (
 var (
 	pool *liteclient.ConnectionPool
 	ctx  context.Context
+
+	done chan struct{}
 )
 
 func GetConnectionPool(urlOrFile string) (pool *liteclient.ConnectionPool,
@@ -21,12 +23,15 @@ func GetConnectionPool(urlOrFile string) (pool *liteclient.ConnectionPool,
 	if pool != nil {
 		return pool, ctx, nil
 	}
+	done = make(chan struct{})
 
 	pool = liteclient.NewConnectionPool()
 
+	ctx = context.Background()
+
 	var connectErr error
 	if _, err := os.Stat(urlOrFile); err != nil && os.IsNotExist(err) {
-		connectErr = pool.AddConnectionsFromConfigUrl(context.Background(), urlOrFile)
+		connectErr = pool.AddConnectionsFromConfigUrl(ctx, urlOrFile)
 	} else {
 		connectErr = pool.AddConnectionsFromConfigFile(urlOrFile)
 	}
@@ -42,15 +47,35 @@ func GetConnectionPool(urlOrFile string) (pool *liteclient.ConnectionPool,
 		defer ticker.Stop()
 
 		client := ton.NewAPIClient(pool, ton.ProofCheckPolicyUnsafe).WithRetry()
-		for range ticker.C {
-			_, err := client.GetTime(context.Background())
-			if err != nil {
-				log.Error().Err(err).Msg("*** failed to get time from node ***")
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				{
+					_, err := client.GetTime(context.Background())
+					if err != nil {
+						log.Error().Err(err).Msg("*** failed to get time from node ***")
+					}
+				}
 			}
 		}
 	}()
 
-	return pool, context.Background(), nil
+	return pool, ctx, nil
+}
+
+func Reconnect(urlOrFile string) (*liteclient.ConnectionPool, context.Context, error) {
+	if pool == nil {
+		return nil, nil, nil
+	}
+
+	close(done)
+	pool.Stop()
+	pool = nil
+	ctx = nil
+
+	return GetConnectionPool(urlOrFile)
 }
 
 func GetAPIClient(pool *liteclient.ConnectionPool) ton.APIClientWrapped {

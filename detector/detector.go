@@ -45,9 +45,11 @@ type Detector struct {
 	cooldownCache *cache.Cache
 
 	out io.Writer
+
+	terminiator tlb.Coins
 }
 
-func NewDetector(dsn string, tonConfig string, out io.Writer) (*Detector, error) {
+func NewDetector(dsn string, tonConfig string, out io.Writer, terminiator tlb.Coins) (*Detector, error) {
 	var err error
 	detector := &Detector{
 		db: nil,
@@ -59,7 +61,8 @@ func NewDetector(dsn string, tonConfig string, out io.Writer) (*Detector, error)
 		stopChan: make(chan struct{}),
 		stopOnce: sync.Once{},
 
-		out: out,
+		out:         out,
+		terminiator: terminiator,
 	}
 
 	detector.db, err = sqlx.Connect("mysql", dsn)
@@ -78,10 +81,10 @@ func NewDetector(dsn string, tonConfig string, out io.Writer) (*Detector, error)
 	detector.chanceCache = cache.New(5*time.Second, 1*time.Second)
 
 	// 会将某个 pool 最近 45 的 sell 缓存起来
-	detector.sellingCache = cache.New(45*time.Second, 1*time.Second)
+	detector.sellingCache = cache.New(40*time.Second, 1*time.Second)
 
-	// 如果多次出现 chance，则该 pool 会被冷却 90s
-	detector.cooldownCache = cache.New(90*time.Second, 1*time.Second)
+	// 如果多次出现 chance，则该 pool 会被冷却 45s
+	detector.cooldownCache = cache.New(30*time.Second, 1*time.Second)
 
 	return detector, nil
 }
@@ -111,6 +114,24 @@ func (d *Detector) Run(preUpdate bool) error {
 		}
 	}
 
+	go func() {
+		ticker := time.NewTicker(time.Second * 600)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-d.stopChan:
+				cancel()
+				log.Info().Msg("detector stopped due to stopChan")
+				return
+			case <-ticker.C:
+				if err := d.PoolReserveUpdater(ctx); err != nil {
+					log.Error().Err(err).Msg("failed to update pool reserve")
+				}
+			}
+		}
+	}()
+
 	// fetching pool information from DB and update those in memory
 	go d.PerodicallyRenewPoolsFromDB(ctx, poolsRenewedCh)
 
@@ -137,7 +158,8 @@ func (d *Detector) Run(preUpdate bool) error {
 		}
 
 		mpResponse := <-mpResponseCh
-		log.Debug().Msgf("received mempool response %+s", mpResponse.String())
+		log.Debug().Msgf("received mempool response %+s", mpResponse.ShortString())
+		d.p("received mempool response %+s", mpResponse.String())
 
 		var pool *model.Pool
 		for _, account := range mpResponse.InvolvedAccounts {

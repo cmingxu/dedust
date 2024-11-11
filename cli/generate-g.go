@@ -3,21 +3,37 @@ package cli
 import (
 	"crypto/ed25519"
 	"database/sql"
-	"sync"
 	"encoding/hex"
 	"fmt"
+	"sync"
 
+	"github.com/cmingxu/dedust/bot"
 	"github.com/cmingxu/dedust/model"
 	"github.com/cmingxu/dedust/utils"
 	"github.com/cmingxu/dedust/wallet"
-	"github.com/cmingxu/dedust/bot"
 	"github.com/jmoiron/sqlx"
-	"github.com/samber/lo"
 	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
+	cli2 "github.com/urfave/cli/v2"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/tvm/cell"
-	cli2 "github.com/urfave/cli/v2"
 )
+
+var generateGCmd = &cli2.Command{
+	Name: "generate-g",
+	Flags: []cli2.Flag{
+		&host,
+		&port,
+		&user,
+		&password,
+		&database,
+		&walletSeed,
+	},
+	Description: "generate G",
+	Action: func(c *cli2.Context) error {
+		return GenGForPools(c)
+	},
+}
 
 func GenGForPools(c *cli2.Context) error {
 	db, err := sqlx.Connect("mysql", utils.ConstructDSN(c))
@@ -31,9 +47,9 @@ func GenGForPools(c *cli2.Context) error {
 		return err
 	}
 
-	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+	botWalletSeeds := MustLoadSeeds(c.String("wallet-seed"))
 	pk := pkFromSeed(botWalletSeeds)
-	botAddr := bot.BotAddress(pk.Public().(ed25519.PublicKey))
+	botAddr := bot.WalletAddress(pk.Public().(ed25519.PublicKey), nil, bot.Bot)
 
 	num := 50
 	wg := sync.WaitGroup{}
@@ -92,7 +108,7 @@ func GenGForPools(c *cli2.Context) error {
 				pool.GAddr = sql.NullString{String: gAddr.String(), Valid: true}
 				pool.PrivateKeyOfG = sql.NullString{String: hex.EncodeToString(pk), Valid: true}
 
-				 // fmt.Println("GAddr", gAddr.String())
+				// fmt.Println("GAddr", gAddr.String())
 				fmt.Println("GPrivateKey", hex.EncodeToString(pk))
 
 				if err = pool.UpdateG(db); err != nil {
@@ -101,7 +117,7 @@ func GenGForPools(c *cli2.Context) error {
 					return
 				}
 
-			}(i * 50 + x, pool)
+			}(i*50+x, pool)
 		}
 
 		wg.Wait()

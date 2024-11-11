@@ -12,6 +12,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+type BotType string
+
+const (
+	V4R2 BotType = "V4R2"
+	Bot  BotType = "Bot"
+	G    BotType = "G"
+)
+
 var (
 	MessageTTL = 60 * 3
 )
@@ -32,7 +40,7 @@ var (
 	JettonTransferMagic = uint64(0xf8a7ea5)
 )
 
-type BotWallet struct {
+type Wallet struct {
 	addr *address.Address
 	api  ton.APIClientWrapped
 	pk   ed25519.PrivateKey
@@ -40,52 +48,41 @@ type BotWallet struct {
 	seq uint64
 }
 
-func NewBotWallet(
+func NewWallet(
 	ctx context.Context,
 	client ton.APIClientWrapped,
-	botprivateKey ed25519.PrivateKey,
+	botType BotType,
+	privateKey ed25519.PrivateKey,
+	botAddr *address.Address, // when wallet is a G wallet
 	seq uint64,
-) *BotWallet {
-	return &BotWallet{
-		addr: botAddress(botprivateKey.Public().(ed25519.PublicKey)),
-		api:  client,
-		pk:   botprivateKey,
-		seq:  seq,
+) *Wallet {
+	w := &Wallet{
+		api: client,
+		pk:  privateKey,
+		seq: seq,
 	}
+
+	w.addr = WalletAddress(privateKey.Public().(ed25519.PublicKey), botAddr, botType)
+	return w
 }
 
-func NewGWallet(
-	ctx context.Context,
-	client ton.APIClientWrapped,
-	gPrivateKey ed25519.PrivateKey,
-	botAddr *address.Address,
-	seq uint64,
-) *BotWallet {
-	return &BotWallet{
-		addr: gAddress(gPrivateKey.Public().(ed25519.PublicKey), botAddr),
-		api:  client,
-		pk:   gPrivateKey,
-		seq:  seq,
-	}
-}
-
-func (b *BotWallet) Info(ctx context.Context) error {
+func (b *Wallet) Info(ctx context.Context) error {
 	return nil
 }
 
-func (b *BotWallet) TransferNoBounce(ctx context.Context, to *address.Address,
+func (b *Wallet) TransferNoBounce(ctx context.Context, to *address.Address,
 	amount tlb.Coins, comment string, wait bool) error {
 
 	return b.transfer(ctx, to, amount, comment, false, wait)
 }
 
-func (b *BotWallet) Transfer(ctx context.Context, to *address.Address,
+func (b *Wallet) Transfer(ctx context.Context, to *address.Address,
 	amount tlb.Coins, comment string, wait bool) error {
 
 	return b.transfer(ctx, to, amount, comment, true, wait)
 }
 
-func (w *BotWallet) transfer(ctx context.Context, to *address.Address, amount tlb.Coins, comment string, bounce bool, waitConfirmation ...bool) (err error) {
+func (w *Wallet) transfer(ctx context.Context, to *address.Address, amount tlb.Coins, comment string, bounce bool, waitConfirmation ...bool) (err error) {
 	transfer, err := w.BuildTransfer(to, amount, bounce, comment)
 	if err != nil {
 		return err
@@ -93,7 +90,7 @@ func (w *BotWallet) transfer(ctx context.Context, to *address.Address, amount tl
 	return w.Send(ctx, 0, transfer, waitConfirmation...)
 }
 
-func (w *BotWallet) BuildTransfer(to *address.Address, amount tlb.Coins, bounce bool, comment string) (_ *wallet.Message, err error) {
+func (w *Wallet) BuildTransfer(to *address.Address, amount tlb.Coins, bounce bool, comment string) (_ *wallet.Message, err error) {
 	var body *cell.Cell
 	if comment != "" {
 		body, err = wallet.CreateCommentCell(comment)
@@ -116,7 +113,7 @@ func (w *BotWallet) BuildTransfer(to *address.Address, amount tlb.Coins, bounce 
 
 // Transfer
 // https://github.com/dedust-io/sdk/blob/main/src/contracts/jettons/JettonWallet.ts
-func (w *BotWallet) BuildDedustSell(
+func (w *Wallet) BuildDedustSell(
 	to *address.Address, // bot jetton wallet
 	otherMainWallet *address.Address,
 	poolAddr *address.Address,
@@ -166,7 +163,7 @@ func (w *BotWallet) BuildDedustSell(
 }
 
 // https://github.com/dedust-io/sdk/blob/main/src/contracts/dex/vault/VaultNative.ts
-func (w *BotWallet) BuildBundle(poolAddr *address.Address,
+func (w *Wallet) BuildBundle(poolAddr *address.Address,
 	amount *big.Int, limit *big.Int, nextLimit *big.Int,
 	deadline uint64,
 	gaddr *address.Address,
@@ -201,6 +198,41 @@ func (w *BotWallet) BuildBundle(poolAddr *address.Address,
 		MustStoreAddr(poolAddr).                        // poolAddr
 		MustStoreUInt(0, 1).                            // Kind
 		MustStoreCoins(limit.Uint64()).                 // Fee
+		MustStoreMaybeRef(nil).
+		MustStoreRef(swapParamsRef).
+		EndCell()
+
+	return &wallet.Message{
+		Mode: wallet.PayGasSeparately + wallet.IgnoreErrors,
+		InternalMessage: &tlb.InternalMessage{
+			IHRDisabled: true,
+			Bounce:      true,
+			DstAddr:     DedustNativeVault,
+			Amount:      tlb.FromNanoTON(new(big.Int).Add(amount, GasAmount)),
+			Body:        body,
+		},
+	}
+}
+
+// https://github.com/dedust-io/sdk/blob/main/src/contracts/dex/vault/VaultNative.ts
+func (w *Wallet) BuildDedustBuy(poolAddr *address.Address,
+	amount *big.Int, limit *big.Int, deadline uint64) (_ *wallet.Message) {
+
+	swapParamsRef := cell.BeginCell().
+		MustStoreUInt(uint64(deadline), 32). // deadline
+		MustStoreAddr(w.addr).               // receipent address
+		MustStoreAddr(nil).                  // referer address
+		MustStoreMaybeRef(nil).              // fulfillPayload
+		MustStoreMaybeRef(nil).              // rejectPayload
+		EndCell()
+
+	body := cell.BeginCell().
+		MustStoreUInt(DedustNativeSwapMagic, 32). // magic
+		MustStoreUInt(0, 64).                     // queryId
+		MustStoreCoins(amount.Uint64()).          // amount
+		MustStoreAddr(poolAddr).                  // poolAddr
+		MustStoreUInt(0, 1).                      // Kind
+		MustStoreCoins(limit.Uint64()).           // Fee
 		MustStoreMaybeRef(nil).
 		MustStoreRef(swapParamsRef).
 		EndCell()

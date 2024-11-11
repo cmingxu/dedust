@@ -7,17 +7,33 @@ import (
 	"time"
 
 	"github.com/cmingxu/dedust/bot"
-	"github.com/cmingxu/dedust/printer"
 	"github.com/cmingxu/dedust/utils"
-	"github.com/jmoiron/sqlx"
 	cli2 "github.com/urfave/cli/v2"
 )
+
+var collectGCmd = &cli2.Command{
+	Name: "collect-g",
+	Flags: []cli2.Flag{
+		&host,
+		&port,
+		&user,
+		&password,
+		&database,
+		&walletSeed,
+		&privateKeyOfG,
+		&tonConfig,
+	},
+	Description: "collect G",
+	Action: func(c *cli2.Context) error {
+		return botCollectG(c)
+	},
+}
 
 func botCollectG(c *cli2.Context) error {
 	var (
 		err error
 	)
-	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
+	botWalletSeeds := MustLoadSeeds(c.String("wallet-seed"))
 
 	gPKStr := c.String("private-key-of-g")
 	if len(gPKStr) == 0 {
@@ -44,28 +60,4 @@ func botCollectG(c *cli2.Context) error {
 		pkFromSeed(botWalletSeeds),
 		gpk,
 	)
-}
-
-func botCollectGAuto(c *cli2.Context) error {
-	var (
-		err error
-	)
-	botWalletSeeds := MustLoadSeeds(c.String("bot-wallet-seed"))
-	// establish connection to the server
-	connPool, ctx, err := utils.GetConnectionPool(c.String("ton-config"))
-	if err != nil {
-		return err
-	}
-	client := utils.GetAPIClientWithTimeout(connPool, time.Second*30)
-
-	db, err := sqlx.Connect("mysql", utils.ConstructDSN(c))
-	if err != nil {
-		return err
-	}
-
-	botPk := pkFromSeed(botWalletSeeds)
-	botAddr := bot.BotAddress(botPk.Public().(ed25519.PublicKey))
-
-	collector := printer.NewGCollector(ctx, client, db, botPk, botAddr)
-	return collector.Run()
 }
