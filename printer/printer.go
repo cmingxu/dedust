@@ -337,7 +337,7 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 	}
 
 	profit := stringToBigInt(chance.Profit)
-	if profit.Cmp(tlb.MustFromTON("0.2").Nano()) < 0 {
+	if profit.Cmp(tlb.MustFromTON("0.12").Nano()) < 0 {
 		return false
 	}
 
@@ -345,7 +345,7 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 		return true
 	}
 
-	if st(in, "20") && bt(profit, "0.2") {
+	if st(in, "20") && bt(profit, "0.12") {
 		return true
 	}
 

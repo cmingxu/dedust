@@ -9,6 +9,7 @@ import (
 	"github.com/cmingxu/dedust/model"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
@@ -68,7 +69,20 @@ func (c *GCollector) collect() error {
 		return err
 	}
 
+	bundlesLatest := []model.Bundle{}
+	if err := c.db.Select(&bundlesLatest, "SELECT * FROM bundles WHERE withdraw = ? AND createdAt >= ?", false, time.Now().Add(-time.Second*300)); err != nil {
+		return err
+	}
+
 	for _, bundle := range bundles {
+		_, found := lo.Find(bundlesLatest, func(b model.Bundle) bool {
+			return b.Address == bundle.Address
+		})
+
+		if found {
+			continue
+		}
+
 		log.Info().Msgf("processing bundle %s", bundle.Address)
 		gAddr := address.MustParseAddr(bundle.Address)
 
