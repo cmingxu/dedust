@@ -46,10 +46,10 @@ type Detector struct {
 
 	out io.Writer
 
-	terminiator tlb.Coins
+	terminator tlb.Coins
 }
 
-func NewDetector(dsn string, tonConfig string, out io.Writer, terminiator tlb.Coins) (*Detector, error) {
+func NewDetector(dsn string, tonConfig string, out io.Writer, terminator tlb.Coins) (*Detector, error) {
 	var err error
 	detector := &Detector{
 		db: nil,
@@ -61,8 +61,8 @@ func NewDetector(dsn string, tonConfig string, out io.Writer, terminiator tlb.Co
 		stopChan: make(chan struct{}),
 		stopOnce: sync.Once{},
 
-		out:         out,
-		terminiator: terminiator,
+		out:        out,
+		terminator: terminator,
 	}
 
 	detector.db, err = sqlx.Connect("mysql", dsn)

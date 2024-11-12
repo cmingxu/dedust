@@ -145,7 +145,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 
 	pairs := make([]InOut, 0)
 	initial := tlb.MustFromTON("2").Nano()
-	step := new(big.Int).Div(new(big.Int).Sub(d.terminiator.Nano(), initial), big.NewInt(200))
+	step := new(big.Int).Div(new(big.Int).Sub(d.terminator.Nano(), initial), big.NewInt(200))
 
 	model := NewModel(x, y, limit, tonAmount)
 	log.Debug().Msgf("trade in: %s", model.TradeIn.String())

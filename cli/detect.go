@@ -23,7 +23,7 @@ var (
 			&tonConfig,
 			&preUpdateReserve,
 			&output,
-			&terminiator,
+			&terminator,
 		},
 		Action: func(c *cli2.Context) error {
 			if err := utils.SetupLogger(c.String("loglevel")); err != nil {
@@ -41,11 +41,11 @@ func detect(c *cli2.Context) error {
 	}
 	defer outFile.Close()
 
-	terminiator := tlb.MustFromTON(c.String("terminator"))
+	terminator := tlb.MustFromTON(c.String("terminator"))
 
 	d, err := detector.NewDetector(utils.ConstructDSN(c),
 		c.String("ton-config"),
-		outFile, terminiator)
+		outFile, terminator)
 	if err != nil {
 		return err
 	}

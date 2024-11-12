@@ -157,7 +157,7 @@ var (
 		Usage: "Set the bot type, valid values are bot, v4, g",
 	}
 
-	terminiator = cli2.StringFlag{
+	terminator = cli2.StringFlag{
 		Name:  "terminator",
 		Value: "200",
 		Usage: "Set the terminator",
