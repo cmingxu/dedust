@@ -107,7 +107,6 @@ func (w *Wallet) BuildMessage(ctx context.Context, op int64, messages []*wallet.
 	if len(messages) > 4 {
 		return nil, errors.New("for this type of wallet max 4 messages can be sent in the same time")
 	}
-
 	/* addr := address.MustParseAddr("EQDYq9DNZfs3ovNMWnaGO0Y-IUq-6aRsNGX_uYckE200mKh9") */
 
 	payload := cell.BeginCell().MustStoreUInt(uint64(SubwalletID), 32).

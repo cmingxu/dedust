@@ -33,6 +33,7 @@ func Transfer(ctx context.Context,
 	fmt.Println("Address:", addr.String())
 	fmt.Println("Type", botType)
 	fmt.Println("Balance:", account.State.Balance)
+
 	seqno, err := getSeqno(ctx, client, masterBlock, addr)
 	if err != nil {
 		return err

@@ -181,7 +181,7 @@ func (d *Detector) Run(preUpdate bool) error {
 
 		outMessage, err := d.outerMessageFromBOC(mpResponse.Boc)
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to parse message")
+			log.Warn().Err(err).Msg("failed to parse external message")
 			continue
 		}
 

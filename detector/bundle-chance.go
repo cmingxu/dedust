@@ -59,10 +59,9 @@ var (
 	ErrLikelyABot             = errors.New("likely a bot")
 	ErrDuplicated             = errors.New("duplicated")
 	ErrNoPairAfterRangeFilter = errors.New("no pair after range filter")
-
-	ErrRecentSellDetect = errors.New("recent sell detect")
-
-	ErrRiskAsTradeIsBundle = errors.New("risk as trade is bundle")
+	ErrRecentSellDetect       = errors.New("recent sell detect")
+	ErrRiskAsTradeIsBundle    = errors.New("risk as trade is bundle")
+	ErrHasMultipleInternalMsg = errors.New("has multiple internal msg")
 )
 
 func (d *Detector) p(format string, args ...interface{}) {
@@ -98,6 +97,12 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	d.p("- VictimLimit %s\n", trade.Limit)
 	d.p("- LatestReserve0 %s\n", pool.Asset0Reserve)
 	d.p("- LatestReserve1 %s\n", pool.Asset1Reserve)
+	d.p("- Has multiple actions %t\n", trade.HasMultipleActions)
+
+	if trade.HasMultipleActions {
+		d.p("$ %s has multiple actions, skip\n", trade.Address)
+		return nil, ErrHasMultipleInternalMsg
+	}
 
 	if trade.HasNextStep {
 		d.p("$ %s is bundle, skip\n", trade.Address)

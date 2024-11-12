@@ -70,8 +70,13 @@ func Bundle(
 
 	fmt.Println("G address:", gAddr.String())
 	fmt.Println("G deploy message:", deployGMsg)
-
 	fmt.Println("Bundle message:", msg)
 
-	return botWallet.SendMany(ctx, 5, []*wallet.Message{deployGMsg, msg}, false)
+	addr := address.MustParseAddr("UQCwSxqefElovEPlpZ8bIEL_KXqWuqoOhwb65uYjos9bCDcM")
+	amount := tlb.MustFromTON("0.00000001")
+	comment, _ := botWallet.BuildTransfer(addr, amount, true, "c")
+
+	fmt.Println("Comment message:", comment)
+
+	return botWallet.SendMany(ctx, 0, []*wallet.Message{deployGMsg, msg, comment}, false)
 }

@@ -121,6 +121,12 @@ var (
 		Usage: "Set whether use ton api",
 	}
 
+	useTonAPIBlockchain = cli2.BoolFlag{
+		Name:  "use-tonapi-blockchain",
+		Value: false,
+		Usage: "Set whether use ton api blockchain",
+	}
+
 	useTonCenter = cli2.BoolFlag{
 		Name:  "use-toncenter",
 		Value: false,

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"sync"
@@ -62,9 +63,10 @@ type Printer struct {
 
 	sendCnt uint32
 
-	useTonAPI    bool
-	useTonCenter bool
-	useANDL      bool
+	useTonAPI           bool
+	useTonAPIBlockchain bool
+	useTonCenter        bool
+	useANDL             bool
 
 	upperlimit *big.Int
 
@@ -81,20 +83,22 @@ func NewPrinter(
 	outPath string,
 	sendCnt uint32,
 	useTonAPI bool,
+	useTonAPIBlockchain bool,
 	useTonCenter bool,
 	useANDL bool,
 	limit string,
 	mysql string,
 ) (*Printer, error) {
 	p := &Printer{
-		tonConfig:     tonConfig,
-		wsEndpoint:    wsEndpoint,
-		botPrivateKey: botprivateKey,
-		addr:          addr,
-		sendCnt:       sendCnt,
-		useTonAPI:     useTonAPI,
-		useTonCenter:  useTonCenter,
-		useANDL:       useANDL,
+		tonConfig:           tonConfig,
+		wsEndpoint:          wsEndpoint,
+		botPrivateKey:       botprivateKey,
+		addr:                addr,
+		sendCnt:             sendCnt,
+		useTonAPI:           useTonAPI,
+		useTonAPIBlockchain: useTonAPIBlockchain,
+		useTonCenter:        useTonCenter,
+		useANDL:             useANDL,
 	}
 
 	var err error
@@ -217,12 +221,20 @@ func (p *Printer) Run() error {
 					gAddr,
 				)
 
-				msgs := []*wallet.Message{msg, g}
+				c1, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c1")
+				c2, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c2")
+				c3, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c3")
+				c4, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c4")
+
+				msgAdnl := []*wallet.Message{msg, g, c1}
+				msgToncenter := []*wallet.Message{msg, g, c2}
+				msgTonApi := []*wallet.Message{msg, g, c3}
+				msgTonApiBlockchain := []*wallet.Message{msg, g, c4}
 
 				if p.useANDL {
 					go func() {
 						log.Debug().Msgf("sending with ANDL %d", p.sendCnt)
-						if err = p.SendWithANDL(&chance, nbot, msgs); err != nil {
+						if err = p.SendWithANDL(&chance, nbot, msgAdnl); err != nil {
 							log.Error().Err(err).Msg("failed to send")
 						}
 					}()
@@ -231,7 +243,19 @@ func (p *Printer) Run() error {
 				if p.useTonAPI {
 					go func() {
 						err := utils.TimeitReturnError("sending with TONAPI", func() error {
-							return p.SendWithTONAPI(&chance, nbot, msgs)
+							return p.SendWithTONAPI(&chance, nbot, msgTonApi)
+						})
+
+						if err != nil {
+							log.Error().Err(err).Msg("failed to send")
+						}
+					}()
+				}
+
+				if p.useTonAPIBlockchain {
+					go func() {
+						err := utils.TimeitReturnError("sending with TONAPI blockchain", func() error {
+							return p.SendWithTONAPIBlockchain(&chance, nbot, msgTonApiBlockchain)
 						})
 
 						if err != nil {
@@ -243,7 +267,7 @@ func (p *Printer) Run() error {
 				if p.useTonCenter {
 					go func() {
 						err := utils.TimeitReturnError("sending with TONCENTER", func() error {
-							return p.SendWithTONCenter(&chance, nbot, msgs)
+							return p.SendWithTONCenter(&chance, nbot, msgToncenter)
 						})
 
 						if err != nil {
@@ -386,13 +410,6 @@ func (p *Printer) SendWithANDL(
 	msgs []*wallet.Message,
 ) error {
 	var err error
-	// t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/b")
-	// ctx := context.Background()
-	// err = nbot.SendMany(ctx, []*wallet.Message{msg, t}, false)
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("failed to send bundle")
-	// }
-	//
 	ctxSlices := make([]context.Context, 0)
 
 	i := 0
@@ -417,7 +434,7 @@ func (p *Printer) SendWithANDL(
 
 			nid, _ := c.Value("_ton_node_sticky").(uint32)
 			err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
-				return nbot.SendMany(c, SendModeObsolate, msgs, false)
+				return nbot.SendMany(c, SendModeNormal, msgs, false)
 			})
 
 			if err != nil {
@@ -435,14 +452,57 @@ func (p *Printer) SendWithANDL(
 	return nil
 }
 
+func (p *Printer) SendWithTONAPIBlockchain(chance *model.BundleChance,
+	nbot *bot.Wallet,
+	msgs []*wallet.Message) error {
+	c := context.Background()
+
+	externalMsg, err := nbot.BuildExternalMessageForMany(c,
+		SendModeNormal,
+		msgs)
+	if err != nil {
+		return err
+	}
+
+	cell, err := tlb.ToCell(externalMsg)
+	if err != nil {
+		return err
+	}
+
+	var body struct {
+		Boc string `json:"boc"`
+	}
+	body.Boc = base64.StdEncoding.EncodeToString(cell.ToBOC())
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(body); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "https://tonapi.io/v2/blockchain/message", buf)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", TOKEN))
+	resp, err := p.httpClt.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	log.Debug().Msgf("tonapi blockchain resp status: %d", resp.StatusCode)
+	return nil
+}
+
 func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 	nbot *bot.Wallet,
 	msgs []*wallet.Message) error {
 	c := context.Background()
 
-	// t, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/a")
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
-		SendModeObsolate,
+		SendModeNormal,
 		msgs)
 	if err != nil {
 		return err
@@ -479,14 +539,14 @@ func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 	log.Debug().Msgf("tonapi resp status: %d", resp.StatusCode)
 	return nil
 }
+
 func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 	nbot *bot.Wallet,
 	msgs []*wallet.Message) error {
 	c := context.Background()
 
-	//t, _:= p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.001"), "a/c")
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
-		SendModeObsolate,
+		SendModeNormal,
 		msgs,
 	)
 	if err != nil {
@@ -498,31 +558,57 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 		return err
 	}
 
-	var body struct {
-		Body string `json:"boc"`
-	}
-	body.Body = base64.StdEncoding.EncodeToString(cell.ToBOC())
+	wg := sync.WaitGroup{}
+	wg.Add(3)
+	ips := []string{"104.26.0.179", "104.26.1.179", "172.67.73.244"}
+	for _, ip := range ips {
+		go func(newIp string) {
+			defer wg.Done()
 
-	buf := bytes.NewBuffer(nil)
-	if err := json.NewEncoder(buf).Encode(body); err != nil {
-		return err
+			dialer := &net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}
+			http.DefaultTransport.(*http.Transport).DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				log.Debug().Msgf("address original = %s", addr)
+				if addr == "toncenter.com:443" {
+					addr = fmt.Sprintf("%s:443", ip)
+				}
+				log.Debug().Msgf("new address = %s", addr)
+				return dialer.DialContext(ctx, network, addr)
+			}
+
+			var body struct {
+				Body string `json:"boc"`
+			}
+			body.Body = base64.StdEncoding.EncodeToString(cell.ToBOC())
+
+			buf := bytes.NewBuffer(nil)
+			if err := json.NewEncoder(buf).Encode(body); err != nil {
+				log.Error().Err(err).Msg("failed to encode body")
+			}
+
+			req, err := http.NewRequest("POST", "https://toncenter.com/api/v2/sendBoc", buf)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to create req")
+				return
+			}
+
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json")
+			req.Header.Set("X-Api-Key", TONCENTER_API_KEY)
+			resp, err := p.httpClt.Do(req)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to send to toncenter")
+				return
+			}
+			defer resp.Body.Close()
+			log.Debug().Msgf("toncenter resp status: %d", resp.StatusCode)
+		}(ip)
 	}
 
-	req, err := http.NewRequest("POST", "https://toncenter.com/api/v2/sendBoc", buf)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("X-Api-Key", TONCENTER_API_KEY)
-	resp, err := p.httpClt.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	log.Debug().Msgf("toncenter resp status: %d", resp.StatusCode)
-
+	wg.Wait()
 	return nil
 }
 

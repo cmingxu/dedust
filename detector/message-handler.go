@@ -48,8 +48,9 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 	d.p("=========================================\n")
 	d.p("=======         BEGIN        ============\n")
 	d.p("=========================================\n")
-	d.p("ExternalIn Dst: %s\n", msg.DestAddr().String())
-	d.p("External Cell: %s\n", msg.Body.Dump())
+	dstAddr := msg.DestAddr()
+	dstAddr.SetBounce(true)
+	d.p("ExternalIn Dst: %s %s\n", dstAddr.String(), time.Now())
 	d.p("External Body RefNum: %d\n", msg.Body.RefsNum())
 
 	slice := msg.Body.BeginParse()

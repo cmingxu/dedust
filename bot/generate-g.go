@@ -2,6 +2,7 @@ package bot
 
 import (
 	"crypto/ed25519"
+	"fmt"
 
 	"github.com/cmingxu/dedust/utils"
 	mywallet "github.com/cmingxu/dedust/wallet"
@@ -17,7 +18,8 @@ func BuildG(botAddr *address.Address,
 	amount tlb.Coins,
 ) (*wallet.Message, *address.Address, error) {
 
-	body := cell.BeginCell().EndCell()
+	body, _ := createCommentCell("G")
+
 	contractCode := getGCode()
 	contractData := getGData(gPrivateKey.Public().(ed25519.PublicKey), botAddr)
 	state := &tlb.StateInit{
@@ -87,4 +89,15 @@ func match(a, b, c []byte) bool {
 		return true
 	}
 	return false
+}
+
+func createCommentCell(text string) (*cell.Cell, error) {
+	// comment ident
+	root := cell.BeginCell().MustStoreUInt(0, 32)
+
+	if err := root.StoreStringSnake(text); err != nil {
+		return nil, fmt.Errorf("failed to build comment: %w", err)
+	}
+
+	return root.EndCell(), nil
 }

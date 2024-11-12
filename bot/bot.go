@@ -184,21 +184,21 @@ func (w *Wallet) BuildBundle(poolAddr *address.Address,
 		EndCell()
 
 		// sell imeidiately
-	next := cell.BeginCell().
-		MustStoreAddr(poolAddr). // next pool addr
-		MustStoreUInt(0, 1).
-		MustStoreCoins(nextLimit.Uint64()). // next limit
-		MustStoreMaybeRef(nil).
-		EndCell()
+	// next := cell.BeginCell().
+	// 	MustStoreAddr(poolAddr). // next pool addr
+	// 	MustStoreUInt(0, 1).
+	// 	MustStoreCoins(nextLimit.Uint64()). // next limit
+	// 	MustStoreMaybeRef(nil).
+	// 	EndCell()
 
 	body := cell.BeginCell().
-		MustStoreUInt(CustomDedustNativeSwapMagic, 32). // magic
-		MustStoreUInt(0, 64).                           // queryId
-		MustStoreCoins(amount.Uint64()).                // amount
-		MustStoreAddr(poolAddr).                        // poolAddr
-		MustStoreUInt(0, 1).                            // Kind
-		MustStoreCoins(limit.Uint64()).                 // Fee
-		MustStoreMaybeRef(next).
+		MustStoreUInt(DedustNativeSwapMagic, 32). // magic
+		MustStoreUInt(0, 64).                     // queryId
+		MustStoreCoins(amount.Uint64()).          // amount
+		MustStoreAddr(poolAddr).                  // poolAddr
+		MustStoreUInt(0, 1).                      // Kind
+		MustStoreCoins(limit.Uint64()).           // Fee
+		MustStoreMaybeRef(nil).
 		MustStoreRef(swapParamsRef).
 		EndCell()
 
