@@ -66,6 +66,7 @@ type Printer struct {
 	useTonAPI           bool
 	useTonAPIBlockchain bool
 	useTonCenter        bool
+	useTonCenterV3      bool
 	useANDL             bool
 
 	upperlimit *big.Int
@@ -85,6 +86,7 @@ func NewPrinter(
 	useTonAPI bool,
 	useTonAPIBlockchain bool,
 	useTonCenter bool,
+	useTonCenterV3 bool,
 	useANDL bool,
 	limit string,
 	mysql string,
@@ -98,6 +100,7 @@ func NewPrinter(
 		useTonAPI:           useTonAPI,
 		useTonAPIBlockchain: useTonAPIBlockchain,
 		useTonCenter:        useTonCenter,
+		useTonCenterV3:      useTonCenterV3,
 		useANDL:             useANDL,
 	}
 
@@ -225,9 +228,11 @@ func (p *Printer) Run() error {
 				c2, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c2")
 				c3, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c3")
 				c4, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c4")
+				c5, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c5")
 
 				msgAdnl := []*wallet.Message{msg, g, c1}
 				msgToncenter := []*wallet.Message{msg, g, c2}
+				msgToncenterV3 := []*wallet.Message{msg, g, c5}
 				msgTonApi := []*wallet.Message{msg, g, c3}
 				msgTonApiBlockchain := []*wallet.Message{msg, g, c4}
 
@@ -256,6 +261,18 @@ func (p *Printer) Run() error {
 					go func() {
 						err := utils.TimeitReturnError("sending with TONAPI blockchain", func() error {
 							return p.SendWithTONAPIBlockchain(&chance, nbot, msgTonApiBlockchain)
+						})
+
+						if err != nil {
+							log.Error().Err(err).Msg("failed to send")
+						}
+					}()
+				}
+
+				if p.useTonCenterV3 {
+					go func() {
+						err := utils.TimeitReturnError("sending with TONCENTER v3", func() error {
+							return p.SendWithTONCenterV3(&chance, nbot, msgToncenterV3)
 						})
 
 						if err != nil {
@@ -609,6 +626,51 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 	}
 
 	wg.Wait()
+	return nil
+}
+
+func (p *Printer) SendWithTONCenterV3(chance *model.BundleChance,
+	nbot *bot.Wallet,
+	msgs []*wallet.Message) error {
+	c := context.Background()
+
+	externalMsg, err := nbot.BuildExternalMessageForMany(c,
+		SendModeNormal,
+		msgs,
+	)
+	if err != nil {
+		return err
+	}
+
+	cell, err := tlb.ToCell(externalMsg)
+	if err != nil {
+		return err
+	}
+
+	var body struct {
+		Body string `json:"boc"`
+	}
+	body.Body = base64.StdEncoding.EncodeToString(cell.ToBOC())
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(body); err != nil {
+		log.Error().Err(err).Msg("failed to encode body")
+	}
+
+	req, err := http.NewRequest("POST", "https://toncenter.com/api/v3/message", buf)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Api-Key", TONCENTER_API_KEY)
+	resp, err := p.httpClt.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	log.Debug().Msgf("toncenter v3 resp status: %d", resp.StatusCode)
 	return nil
 }
 

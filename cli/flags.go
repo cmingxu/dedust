@@ -133,6 +133,12 @@ var (
 		Usage: "Set whether use ton center",
 	}
 
+	useTonCenterV3 = cli2.BoolFlag{
+		Name:  "use-toncenter-v3",
+		Value: false,
+		Usage: "Set whether use ton center v3",
+	}
+
 	useANDL = cli2.BoolFlag{
 		Name:  "use-andl",
 		Value: true,
