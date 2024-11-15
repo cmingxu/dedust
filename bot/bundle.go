@@ -78,5 +78,5 @@ func Bundle(
 
 	fmt.Println("Comment message:", comment)
 
-	return botWallet.SendMany(ctx, 0, []*wallet.Message{deployGMsg, msg, comment}, false)
+	return botWallet.SendMany(ctx, 5, []*wallet.Message{deployGMsg, msg, comment}, false)
 }

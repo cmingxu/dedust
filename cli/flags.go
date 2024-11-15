@@ -117,25 +117,25 @@ var (
 
 	useTonAPI = cli2.BoolFlag{
 		Name:  "use-tonapi",
-		Value: false,
+		Value: true,
 		Usage: "Set whether use ton api",
 	}
 
 	useTonAPIBlockchain = cli2.BoolFlag{
 		Name:  "use-tonapi-blockchain",
-		Value: false,
+		Value: true,
 		Usage: "Set whether use ton api blockchain",
 	}
 
 	useTonCenter = cli2.BoolFlag{
 		Name:  "use-toncenter",
-		Value: false,
+		Value: true,
 		Usage: "Set whether use ton center",
 	}
 
 	useTonCenterV3 = cli2.BoolFlag{
 		Name:  "use-toncenter-v3",
-		Value: false,
+		Value: true,
 		Usage: "Set whether use ton center v3",
 	}
 
@@ -149,6 +149,12 @@ var (
 		Name:  "limit",
 		Value: "50",
 		Usage: "Set the limit amount of TON to bundle",
+	}
+
+	floor = cli2.StringFlag{
+		Name:  "floor",
+		Value: "1",
+		Usage: "Set the floor amount of TON to bundle",
 	}
 
 	privateKeyOfG = cli2.StringFlag{
@@ -167,5 +173,11 @@ var (
 		Name:  "terminator",
 		Value: "200",
 		Usage: "Set the terminator",
+	}
+
+	enableTracing = cli2.BoolFlag{
+		Name:  "enable-tracing",
+		Value: false,
+		Usage: "Set whether enable tracing",
 	}
 )

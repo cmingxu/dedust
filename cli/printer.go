@@ -23,11 +23,13 @@ var printerCmd = &cli2.Command{
 		&useTonCenterV3,
 		&useANDL,
 		&limit,
+		&floor,
 		&host,
 		&port,
 		&user,
 		&password,
 		&database,
+		&enableTracing,
 	},
 	Description: "to print money",
 	Action: func(c *cli2.Context) error {
@@ -57,7 +59,9 @@ func startPrinter(c *cli2.Context) error {
 		c.Bool("use-toncenter"),
 		c.Bool("use-toncenter-v3"),
 		c.Bool("use-andl"),
+		c.Bool("enable-tracing"),
 		c.String("limit"),
+		c.String("floor"),
 		utils.ConstructDSN(c),
 	)
 	if err != nil {

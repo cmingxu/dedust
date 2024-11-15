@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -68,8 +69,10 @@ type Printer struct {
 	useTonCenter        bool
 	useTonCenterV3      bool
 	useANDL             bool
+	enableTracing       bool
 
 	upperlimit *big.Int
+	lowerlimit *big.Int
 
 	httpClt *http.Client
 
@@ -88,7 +91,9 @@ func NewPrinter(
 	useTonCenter bool,
 	useTonCenterV3 bool,
 	useANDL bool,
+	enableTracing bool,
 	limit string,
+	lowerlimit string,
 	mysql string,
 ) (*Printer, error) {
 	p := &Printer{
@@ -102,6 +107,7 @@ func NewPrinter(
 		useTonCenter:        useTonCenter,
 		useTonCenterV3:      useTonCenterV3,
 		useANDL:             useANDL,
+		enableTracing:       enableTracing,
 	}
 
 	var err error
@@ -118,6 +124,13 @@ func NewPrinter(
 	}
 
 	p.upperlimit = l.Nano()
+
+	l, err = tlb.FromTON(lowerlimit)
+	if err != nil {
+		return nil, err
+	}
+
+	p.lowerlimit = l.Nano()
 
 	p.httpClt = &http.Client{
 		Timeout: 5 * time.Second,
@@ -224,17 +237,24 @@ func (p *Printer) Run() error {
 					gAddr,
 				)
 
-				c1, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c1")
-				c2, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c2")
-				c3, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c3")
-				c4, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c4")
-				c5, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c5")
+				msgAdnl := []*wallet.Message{msg, g}
+				msgToncenter := []*wallet.Message{msg, g}
+				msgToncenterV3 := []*wallet.Message{msg, g}
+				msgTonApi := []*wallet.Message{msg, g}
+				msgTonApiBlockchain := []*wallet.Message{msg, g}
 
-				msgAdnl := []*wallet.Message{msg, g, c1}
-				msgToncenter := []*wallet.Message{msg, g, c2}
-				msgToncenterV3 := []*wallet.Message{msg, g, c5}
-				msgTonApi := []*wallet.Message{msg, g, c3}
-				msgTonApiBlockchain := []*wallet.Message{msg, g, c4}
+				if p.enableTracing {
+					c1, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c1")
+					msgAdnl = append(msgAdnl, c1)
+					c2, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c2")
+					msgToncenter = append(msgToncenter, c2)
+					c3, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c3")
+					msgToncenterV3 = append(msgToncenterV3, c3)
+					c4, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c4")
+					msgTonApi = append(msgTonApi, c4)
+					c5, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "c5")
+					msgTonApiBlockchain = append(msgTonApiBlockchain, c5)
+				}
 
 				if p.useANDL {
 					go func() {
@@ -257,40 +277,54 @@ func (p *Printer) Run() error {
 					}()
 				}
 
+				httpSendCnt := 5
 				if p.useTonAPIBlockchain {
-					go func() {
-						err := utils.TimeitReturnError("sending with TONAPI blockchain", func() error {
-							return p.SendWithTONAPIBlockchain(&chance, nbot, msgTonApiBlockchain)
-						})
+					i := 0
+					for i < httpSendCnt {
+						go func() {
+							err := utils.TimeitReturnError("sending with TONAPI blockchain", func() error {
+								return p.SendWithTONAPIBlockchain(&chance, nbot, msgTonApiBlockchain)
+							})
 
-						if err != nil {
-							log.Error().Err(err).Msg("failed to send")
-						}
-					}()
+							if err != nil {
+								log.Error().Err(err).Msg("failed to send")
+							}
+						}()
+						i++
+					}
 				}
 
 				if p.useTonCenterV3 {
-					go func() {
-						err := utils.TimeitReturnError("sending with TONCENTER v3", func() error {
-							return p.SendWithTONCenterV3(&chance, nbot, msgToncenterV3)
-						})
+					i := 0
+					for i < httpSendCnt {
+						go func() {
+							err := utils.TimeitReturnError("sending with TONCENTER v3", func() error {
+								return p.SendWithTONCenterV3(&chance, nbot, msgToncenterV3)
+							})
 
-						if err != nil {
-							log.Error().Err(err).Msg("failed to send")
-						}
-					}()
+							if err != nil {
+								log.Error().Err(err).Msg("failed to send")
+							}
+						}()
+						i++
+					}
 				}
 
 				if p.useTonCenter {
-					go func() {
-						err := utils.TimeitReturnError("sending with TONCENTER", func() error {
-							return p.SendWithTONCenter(&chance, nbot, msgToncenter)
-						})
+					i := 0
+					for i < httpSendCnt {
+						go func() {
+							err := utils.TimeitReturnError("sending with TONCENTER", func() error {
+								return p.SendWithTONCenter(&chance, nbot, msgToncenter)
+							})
 
-						if err != nil {
-							log.Error().Err(err).Msg("failed to send")
-						}
-					}()
+							if err != nil {
+								log.Error().Err(err).Msg("failed to send")
+							}
+						}()
+
+						i++
+					}
 				}
 
 				if err != nil {
@@ -377,6 +411,11 @@ func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
 		return false
 	}
 
+	if in.Cmp(p.lowerlimit) < 0 {
+		log.Debug().Msg("[-] SKIP, in amount too small")
+		return false
+	}
+
 	profit := stringToBigInt(chance.Profit)
 	if profit.Cmp(tlb.MustFromTON("0.12").Nano()) < 0 {
 		return false
@@ -451,7 +490,7 @@ func (p *Printer) SendWithANDL(
 
 			nid, _ := c.Value("_ton_node_sticky").(uint32)
 			err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
-				return nbot.SendMany(c, SendModeNormal, msgs, false)
+				return nbot.SendMany(c, SendModeObsolate, msgs, false)
 			})
 
 			if err != nil {
@@ -475,7 +514,7 @@ func (p *Printer) SendWithTONAPIBlockchain(chance *model.BundleChance,
 	c := context.Background()
 
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
-		SendModeNormal,
+		SendModeObsolate,
 		msgs)
 	if err != nil {
 		return err
@@ -510,6 +549,15 @@ func (p *Printer) SendWithTONAPIBlockchain(chance *model.BundleChance,
 	defer resp.Body.Close()
 
 	log.Debug().Msgf("tonapi blockchain resp status: %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		log.Debug().Msgf("toncenter v3 resp content: %s", content)
+	}
+
 	return nil
 }
 
@@ -519,7 +567,7 @@ func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 	c := context.Background()
 
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
-		SendModeNormal,
+		SendModeObsolate,
 		msgs)
 	if err != nil {
 		return err
@@ -553,6 +601,14 @@ func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		log.Debug().Msgf("toncenter v3 resp content: %s", content)
+	}
 	log.Debug().Msgf("tonapi resp status: %d", resp.StatusCode)
 	return nil
 }
@@ -563,7 +619,7 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 	c := context.Background()
 
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
-		SendModeNormal,
+		SendModeObsolate,
 		msgs,
 	)
 	if err != nil {
@@ -622,6 +678,14 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 			}
 			defer resp.Body.Close()
 			log.Debug().Msgf("toncenter resp status: %d", resp.StatusCode)
+			if resp.StatusCode != http.StatusOK {
+				content, err := io.ReadAll(resp.Body)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to read resp body")
+				}
+
+				log.Debug().Msgf("toncenter v3 resp content: %s", content)
+			}
 		}(ip)
 	}
 
@@ -635,7 +699,7 @@ func (p *Printer) SendWithTONCenterV3(chance *model.BundleChance,
 	c := context.Background()
 
 	externalMsg, err := nbot.BuildExternalMessageForMany(c,
-		SendModeNormal,
+		SendModeObsolate,
 		msgs,
 	)
 	if err != nil {
@@ -671,6 +735,14 @@ func (p *Printer) SendWithTONCenterV3(chance *model.BundleChance,
 	}
 	defer resp.Body.Close()
 	log.Debug().Msgf("toncenter v3 resp status: %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+
+		log.Debug().Msgf("toncenter v3 resp content: %s", content)
+	}
 	return nil
 }
 

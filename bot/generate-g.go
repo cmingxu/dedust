@@ -18,7 +18,8 @@ func BuildG(botAddr *address.Address,
 	amount tlb.Coins,
 ) (*wallet.Message, *address.Address, error) {
 
-	body, _ := createCommentCell("G")
+	// body, _ := createCommentCell("G")
+	body := cell.BeginCell().EndCell()
 
 	contractCode := getGCode()
 	contractData := getGData(gPrivateKey.Public().(ed25519.PublicKey), botAddr)
