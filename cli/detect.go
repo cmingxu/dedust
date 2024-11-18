@@ -24,6 +24,7 @@ var (
 			&preUpdateReserve,
 			&output,
 			&terminator,
+			&tonapiIp,
 		},
 		Action: func(c *cli2.Context) error {
 			if err := utils.SetupLogger(c.String("loglevel")); err != nil {
@@ -45,7 +46,10 @@ func detect(c *cli2.Context) error {
 
 	d, err := detector.NewDetector(utils.ConstructDSN(c),
 		c.String("ton-config"),
-		outFile, terminator)
+		outFile,
+		terminator,
+		c.String("tonapi-ip"),
+	)
 	if err != nil {
 		return err
 	}

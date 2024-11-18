@@ -3,6 +3,7 @@ package detector
 import (
 	"context"
 	"crypto/sha1"
+	"crypto/tls"
 	"encoding/hex"
 	"fmt"
 	"strings"
@@ -18,7 +19,10 @@ import (
 // ton API websocket request support up to 1000 accountsId passingin
 const AccountsLenOfEachWebSocketRequest = 950
 const TOKEN = "AEETAB4AU6BMELIAAAADMMZHBQOIVYFMRL7QZ77HCXATNHS5PF6CIJQJNAQRLC4OG73V2VQ"
+
 const TonAPIMemPoolEndpoint = "wss://tonapi.io/v2/websocket?token=%s"
+
+// const TonAPIMemPoolEndpoint = "wss://116.202.150.118/v2/websocket?token=%s"
 
 type MPRequest struct {
 	Id      int      `json:"id"`
@@ -95,8 +99,17 @@ func (d *Detector) subscribe(ctx context.Context,
 	params.Params = append(params.Params, fmt.Sprintf(
 		"accounts=%s", strings.Join(accounts, ","),
 	))
+	websocket.DefaultDialer.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: true,
+	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf(TonAPIMemPoolEndpoint, TOKEN), nil)
+	wssEndpoint := fmt.Sprintf(TonAPIMemPoolEndpoint, TOKEN)
+	if len(d.tonapiIP) != 0 {
+		wssEndpoint = strings.Replace(wssEndpoint, "tonapi.io", d.tonapiIP, 1)
+	}
+
+	log.Debug().Msgf("dialing %s", wssEndpoint)
+	conn, _, err := websocket.DefaultDialer.Dial(wssEndpoint, nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to dial")
 	}

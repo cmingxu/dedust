@@ -1,6 +1,7 @@
 package detector
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strings"
 
@@ -50,7 +51,12 @@ func MemPoolCheck(dsn string) error {
 		"accounts=%s", strings.Join(accounts, ","),
 	))
 
-	conn, _, err := websocket.DefaultDialer.Dial(fmt.Sprintf(TonAPIMemPoolEndpoint, TOKEN), nil)
+	dialer := websocket.DefaultDialer
+	dialer.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: true,
+	}
+	conn, _, err := dialer.Dial(fmt.Sprintf(TonAPIMemPoolEndpoint, TOKEN), nil)
+
 	if err != nil {
 		return errors.Wrap(err, "failed to dial")
 	}

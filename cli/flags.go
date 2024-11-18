@@ -180,4 +180,16 @@ var (
 		Value: false,
 		Usage: "Set whether enable tracing",
 	}
+
+	walletMode = cli2.IntFlag{
+		Name:  "wallet-mode",
+		Value: 5,
+		Usage: "Set the wallet mode",
+	}
+
+	tonapiIp = cli2.StringFlag{
+		Name:  "tonapi-ip",
+		Value: "",
+		Usage: "Set the tonapi ip, instead of using domain",
+	}
 )

@@ -64,9 +64,10 @@ func Bundle(
 		return err
 	}
 
+	op := int64(0)
 	nextLimit := tonIn
 	msg := botWallet.BuildBundle(poolAddr, tonIn.Nano(), limit.Nano(),
-		nextLimit.Nano(), 0, gAddr)
+		nextLimit.Nano(), 0, gAddr, op)
 
 	fmt.Println("G address:", gAddr.String())
 	fmt.Println("G deploy message:", deployGMsg)
@@ -78,5 +79,5 @@ func Bundle(
 
 	fmt.Println("Comment message:", comment)
 
-	return botWallet.SendMany(ctx, 5, []*wallet.Message{deployGMsg, msg, comment}, false)
+	return botWallet.SendMany(ctx, op, []*wallet.Message{deployGMsg, msg, comment}, false)
 }

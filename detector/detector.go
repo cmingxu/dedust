@@ -19,37 +19,39 @@ import (
 
 type Detector struct {
 	db *sqlx.DB
-
 	// pool renew interval
 	poolRenewTimer *time.Timer
+	poolLock       sync.RWMutex
+	poolMap        map[string]*model.Pool
 
-	// pool lock
-	poolLock sync.RWMutex
-	poolMap  map[string]*model.Pool
-
+	// stop signal
 	stopChan chan struct{}
 	stopOnce sync.Once
 
-	// api client
+	// api client ton pool
 	apiClient ton.APIClientWrapped
 	connPool  *liteclient.ConnectionPool
 	apiCtx    context.Context
 
 	// cache chance 防止重复的交易产生的机会信号
 	chanceCache *cache.Cache
-
 	// selling cache 防止最新的 selling 对 reserve 产生影响
 	sellingCache *cache.Cache
-
 	// cooldown cache 防止在相同 pool 上的过于频繁的信号
 	cooldownCache *cache.Cache
 
+	// dump sink
 	out io.Writer
 
 	terminator tlb.Coins
+
+	tonapiIP string
 }
 
-func NewDetector(dsn string, tonConfig string, out io.Writer, terminator tlb.Coins) (*Detector, error) {
+func NewDetector(dsn string, tonConfig string, out io.Writer,
+	terminator tlb.Coins,
+	tonapiIp string,
+) (*Detector, error) {
 	var err error
 	detector := &Detector{
 		db: nil,
@@ -63,6 +65,7 @@ func NewDetector(dsn string, tonConfig string, out io.Writer, terminator tlb.Coi
 
 		out:        out,
 		terminator: terminator,
+		tonapiIP:   tonapiIp,
 	}
 
 	detector.db, err = sqlx.Connect("mysql", dsn)
@@ -78,11 +81,9 @@ func NewDetector(dsn string, tonConfig string, out io.Writer, terminator tlb.Coi
 	detector.apiClient = utils.GetAPIClient(detector.connPool)
 
 	// a cache expire at 5s and purge at 10s
-	detector.chanceCache = cache.New(5*time.Second, 1*time.Second)
-
+	detector.chanceCache = cache.New(30*time.Second, 1*time.Second)
 	// 会将某个 pool 最近 45 的 sell 缓存起来
-	detector.sellingCache = cache.New(45*time.Second, 1*time.Second)
-
+	detector.sellingCache = cache.New(65*time.Second, 1*time.Second)
 	// 如果多次出现 chance，则该 pool 会被冷却 45s
 	detector.cooldownCache = cache.New(45*time.Second, 1*time.Second)
 

@@ -167,7 +167,13 @@ func (w *Wallet) BuildBundle(poolAddr *address.Address,
 	amount *big.Int, limit *big.Int, nextLimit *big.Int,
 	deadline uint64,
 	gaddr *address.Address,
-) (_ *wallet.Message) {
+	op int64) (_ *wallet.Message) {
+
+	magic := DedustNativeSwapMagic
+	if op == 5 {
+		magic = CustomDedustNativeSwapMagic
+
+	}
 
 	passingPoolAddr := cell.BeginCell().
 		MustStoreAddr(poolAddr).
@@ -192,12 +198,12 @@ func (w *Wallet) BuildBundle(poolAddr *address.Address,
 	// 	EndCell()
 
 	body := cell.BeginCell().
-		MustStoreUInt(CustomDedustNativeSwapMagic, 32). // magic
-		MustStoreUInt(0, 64).                           // queryId
-		MustStoreCoins(amount.Uint64()).                // amount
-		MustStoreAddr(poolAddr).                        // poolAddr
-		MustStoreUInt(0, 1).                            // Kind
-		MustStoreCoins(limit.Uint64()).                 // Fee
+		MustStoreUInt(magic, 32).        // magic
+		MustStoreUInt(0, 64).            // queryId
+		MustStoreCoins(amount.Uint64()). // amount
+		MustStoreAddr(poolAddr).         // poolAddr
+		MustStoreUInt(0, 1).             // Kind
+		MustStoreCoins(limit.Uint64()).  // Fee
 		MustStoreMaybeRef(nil).
 		MustStoreRef(swapParamsRef).
 		EndCell()

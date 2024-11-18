@@ -30,6 +30,7 @@ var printerCmd = &cli2.Command{
 		&password,
 		&database,
 		&enableTracing,
+		&walletMode,
 	},
 	Description: "to print money",
 	Action: func(c *cli2.Context) error {
@@ -62,6 +63,7 @@ func startPrinter(c *cli2.Context) error {
 		c.Bool("enable-tracing"),
 		c.String("limit"),
 		c.String("floor"),
+		int64(c.Int("wallet-mode")),
 		utils.ConstructDSN(c),
 	)
 	if err != nil {
