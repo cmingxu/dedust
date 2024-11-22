@@ -94,6 +94,7 @@ type Trade struct {
 	HasNextStep        bool      `json:"-" db:"-"`
 	HasMultipleActions bool      `json:"-" db:"-"`
 	FirstSeen          time.Time `json:"-" db:"-"`
+	Deadline           uint64    `json:"-" db:"-"`
 }
 
 func CreateTradeTableIfNotExists(db *sqlx.DB) error {

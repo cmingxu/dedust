@@ -145,6 +145,7 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		trade.SwapType = model.SwapTypeNative
 		trade.Amount = nativeSwap.Amount.Nano().String()
 		trade.Limit = nativeSwap.SwapStep.SwapStepParams.Limit.Nano().String()
+		trade.Deadline = nativeSwap.SwapParams.Deadline
 		trade.Recipient = nativeSwap.SwapParams.Recipient.String()
 		trade.Referrer = nativeSwap.SwapParams.Referrer.String()
 		if nativeSwap.SwapParams.FullfillPayload != nil {
@@ -175,6 +176,7 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		swapStep := transfer.ForwardPayload.SwapStep
 		swapParams := transfer.ForwardPayload.SwapParams
 		trade.Limit = swapStep.SwapStepParams.Limit.Nano().String()
+		trade.Deadline = swapParams.Deadline
 		trade.Recipient = swapParams.Recipient.String()
 		trade.Referrer = swapParams.Referrer.String()
 		if swapParams.FullfillPayload != nil {

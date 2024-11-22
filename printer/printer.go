@@ -347,6 +347,9 @@ func (p *Printer) Run() error {
 						i++
 					}
 				}
+				if err := chance.DumpToIO(p.out); err != nil {
+					log.Error().Err(err).Msg("failed to write to file")
+				}
 
 				if err != nil {
 					log.Error().Err(err).Msg("failed to send")
@@ -521,10 +524,6 @@ func (p *Printer) SendWithANDL(
 	}
 	wg.Wait()
 	p.working = true
-
-	if err := chance.DumpToIO(p.out); err != nil {
-		log.Error().Err(err).Msg("failed to write to file")
-	}
 
 	return nil
 }
