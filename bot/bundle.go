@@ -1,9 +1,14 @@
 package bot
 
 import (
+	"bytes"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 
 	"github.com/cmingxu/dedust/model"
@@ -78,6 +83,37 @@ func Bundle(
 	comment, _ := botWallet.BuildTransfer(addr, amount, true, "c")
 
 	fmt.Println("Comment message:", comment)
+	//return botWallet.SendMany(ctx, op, []*wallet.Message{deployGMsg, msg, comment}, false)
 
-	return botWallet.SendMany(ctx, op, []*wallet.Message{deployGMsg, msg, comment}, false)
+	externalMsg, err := botWallet.BuildExternalMessageForMany(context.Background(),
+		0,
+		[]*wallet.Message{deployGMsg, msg, comment})
+	if err != nil {
+		return err
+	}
+	cell, err := tlb.ToCell(externalMsg)
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Boc string `json:"boc"`
+	}
+	body.Boc = base64.StdEncoding.EncodeToString(cell.ToBOC())
+
+	buf := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(buf).Encode(body); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "https://tonapi.io/v2/blockchain/message", buf)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	const TOKEN = "AEETAB4AU6BMELIAAAADMMZHBQOIVYFMRL7QZ77HCXATNHS5PF6CIJQJNAQRLC4OG73V2VQ"
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", TOKEN))
+	resp, err := http.DefaultClient.Do(req)
+	io.Copy(os.Stdout, resp.Body)
+	return err
 }

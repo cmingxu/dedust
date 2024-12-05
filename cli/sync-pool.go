@@ -32,6 +32,7 @@ var (
 			&database,
 			&tonConfig,
 			&walletSeed,
+			&generateG,
 		},
 		Action: func(c *cli2.Context) error {
 			if err := utils.SetupLogger(c.String("loglevel")); err != nil {
@@ -112,32 +113,34 @@ func syncPool(c *cli2.Context) error {
 			continue
 		}
 
-		vault1Addr := address.MustParseAddr(pool.Asset1Vault)
-		asset1JettonMasterAddr := address.MustParseAddr(pool.Asset1Address)
-		vault1JettonWalletAddr := address.MustParseAddr(pool.Asset1VaultJettonWalletAddress.String)
-		code, ok := model.WalletCodeBOCs[pool.Asset1TokenWalletCode]
-		if !ok {
-			return fmt.Errorf("asset1 token wallet code not found")
+		if c.Bool("generate-g") {
+			vault1Addr := address.MustParseAddr(pool.Asset1Vault)
+			asset1JettonMasterAddr := address.MustParseAddr(pool.Asset1Address)
+			vault1JettonWalletAddr := address.MustParseAddr(pool.Asset1VaultJettonWalletAddress.String)
+			code, ok := model.WalletCodeBOCs[pool.Asset1TokenWalletCode]
+			if !ok {
+				return fmt.Errorf("asset1 token wallet code not found")
+			}
+
+			content, _ := hex.DecodeString(code)
+			codeCell, _ := cell.FromBOC(content)
+
+			pk, gAddr, err := bot.BuildGBestFitInShard(
+				botAddr,
+				vault1Addr,
+				asset1JettonMasterAddr,
+				vault1JettonWalletAddr,
+				codeCell,
+			)
+
+			if err != nil {
+				log.Err(err).Msg("failed to build gbestfitinshard")
+				continue
+			}
+
+			pool.PrivateKeyOfG = sql.NullString{String: hex.EncodeToString(pk), Valid: true}
+			pool.GAddr = sql.NullString{String: gAddr.String(), Valid: true}
 		}
-
-		content, _ := hex.DecodeString(code)
-		codeCell, _ := cell.FromBOC(content)
-
-		pk, gAddr, err := bot.BuildGBestFitInShard(
-			botAddr,
-			vault1Addr,
-			asset1JettonMasterAddr,
-			vault1JettonWalletAddr,
-			codeCell,
-		)
-
-		if err != nil {
-			log.Err(err).Msg("failed to build gbestfitinshard")
-			continue
-		}
-
-		pool.PrivateKeyOfG = sql.NullString{String: hex.EncodeToString(pk), Valid: true}
-		pool.GAddr = sql.NullString{String: gAddr.String(), Valid: true}
 
 		err = pool.SaveToDB(db)
 		if err != nil {

@@ -41,6 +41,10 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 	log.Debug().Msgf("=======         BEGIN        ============")
 	log.Debug().Msgf("=========================================")
 
+	dest := msg.DestAddr()
+	dest.SetBounce(true)
+	log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
+	log.Debug().Msgf("ExternalIn Dst(Bounceable): %s", dest.String())
 	log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
 	// log.Debug().Msgf("%s", msg.Body.Dump())
 	log.Debug().Msgf("External Body RefNum: %d", msg.Body.RefsNum())
@@ -51,6 +55,7 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 	dstAddr := msg.DestAddr()
 	dstAddr.SetBounce(true)
 	d.p("ExternalIn Dst: %s %s\n", dstAddr.String(), time.Now())
+	d.p("ExternalIn Dst(Bounceable): %s", dest.String())
 	d.p("External Body RefNum: %d\n", msg.Body.RefsNum())
 
 	slice := msg.Body.BeginParse()
@@ -83,6 +88,11 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 			return &trade, errors.Wrap(err, "failed to load InternalMessage")
 		}
 		d.p("V5 Internal Cell: %s\n", msg.Action.OutMsg.Dump())
+		d.p("V5 Slice BitsLeft: %d RefNum %d \n", slice.BitsLeft(), slice.RefsNum())
+		d.p("V5 msg empty bitsleft: %d, refnums:  %d\n", msg.Action.Empty.BitsSize(), msg.Action.Empty.RefsNum())
+		if msg.Action.Empty.RefsNum() > 0 {
+			trade.HasMultipleActions = true
+		}
 
 	} else {
 		var internalCell *cell.Cell
@@ -140,6 +150,8 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		}
 		log.Debug().Msgf("(BUY) NativeSwap: %+v", nativeSwap)
 		d.p("NativeSwap: %+v\n", nativeSwap)
+		d.p("NativeSwap(SwapParams): %+v\n", nativeSwap.SwapParams)
+		d.p("NativeSwap(SwapStep): %+v\n", nativeSwap.SwapStep)
 
 		trade.TradeType = model.TradeTypeBuy
 		trade.SwapType = model.SwapTypeNative

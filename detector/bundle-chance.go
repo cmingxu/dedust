@@ -62,7 +62,7 @@ var (
 	ErrRecentSellDetect       = errors.New("recent sell detect")
 	ErrRiskAsTradeIsBundle    = errors.New("risk as trade is bundle")
 	ErrHasMultipleInternalMsg = errors.New("has multiple internal msg")
-	ErrDeadlineDetect         = errors.New("deadline detect")
+	ErrDeadlineDetect         = errors.New("deadline too short")
 )
 
 func (d *Detector) p(format string, args ...interface{}) {
@@ -100,7 +100,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	d.p("- LatestReserve1 %s\n", pool.Asset1Reserve)
 	d.p("- Has multiple actions %t\n", trade.HasMultipleActions)
 
-	if trade.Deadline > 0 {
+	if trade.Deadline > 0 && trade.Deadline < uint64(time.Now().Unix()+4) {
 		d.p("$ %s has deadline, skip\n", trade.Address)
 		return nil, ErrDeadlineDetect
 

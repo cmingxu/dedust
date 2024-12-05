@@ -23,7 +23,6 @@ import (
 var (
 	ValidJettonWalletHash = []string{
 		"vrBoPr64kn/p/I7AoYvH3ReJlomCWhIeq0bFo6hg0M4=",
-		"iUaPAseOVwgC45l5yFFvw43wfqdqSDV+BTbyuns+43s=",
 		"p2DWKdU0PnbQRQF9ncIW/IoweoN3gV/rKwpcSQ5zNIY=",
 		"jSjqQht36AX+pSrPM1KWSZ8Drsjp/SHdtfJWSqZcSN4=",
 	}

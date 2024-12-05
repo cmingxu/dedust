@@ -2,6 +2,7 @@ package cli
 
 import (
 	"crypto/ed25519"
+	"strings"
 
 	"github.com/cmingxu/dedust/bot"
 	"github.com/cmingxu/dedust/printer"
@@ -31,6 +32,8 @@ var printerCmd = &cli2.Command{
 		&database,
 		&enableTracing,
 		&walletMode,
+		&skippedPool,
+		&skippedVictims,
 	},
 	Description: "to print money",
 	Action: func(c *cli2.Context) error {
@@ -47,6 +50,8 @@ func startPrinter(c *cli2.Context) error {
 
 	botprivateKey := pkFromSeed(botWalletSeeds)
 	botAddr := bot.WalletAddress(botprivateKey.Public().(ed25519.PublicKey), nil, bot.Bot)
+	skippedPools := strings.SplitN(c.String("skipped-pool"), ",", -1)
+	skippedVictims := strings.SplitN(c.String("skipped-victims"), ",", -1)
 
 	p, err := printer.NewPrinter(
 		c.String("ton-config"),
@@ -65,6 +70,8 @@ func startPrinter(c *cli2.Context) error {
 		c.String("floor"),
 		int64(c.Int("wallet-mode")),
 		utils.ConstructDSN(c),
+		skippedPools,
+		skippedVictims,
 	)
 	if err != nil {
 		return err

@@ -20,9 +20,9 @@ import (
 const AccountsLenOfEachWebSocketRequest = 950
 const TOKEN = "AEETAB4AU6BMELIAAAADMMZHBQOIVYFMRL7QZ77HCXATNHS5PF6CIJQJNAQRLC4OG73V2VQ"
 
-const TonAPIMemPoolEndpoint = "wss://tonapi.io/v2/websocket?token=%s"
+// const TonAPIMemPoolEndpoint = "wss://tonapi.io/v2/websocket?token=%s"
 
-// const TonAPIMemPoolEndpoint = "wss://116.202.150.118/v2/websocket?token=%s"
+const TonAPIMemPoolEndpoint = "wss://116.202.150.118/v2/websocket?token=%s"
 
 type MPRequest struct {
 	Id      int      `json:"id"`

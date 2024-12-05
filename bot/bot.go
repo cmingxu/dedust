@@ -203,7 +203,7 @@ func (w *Wallet) BuildBundle(poolAddr *address.Address,
 		MustStoreCoins(amount.Uint64()). // amount
 		MustStoreAddr(poolAddr).         // poolAddr
 		MustStoreUInt(0, 1).             // Kind
-		MustStoreCoins(limit.Uint64()).  // Fee
+		MustStoreBigCoins(limit).
 		MustStoreMaybeRef(nil).
 		MustStoreRef(swapParamsRef).
 		EndCell()

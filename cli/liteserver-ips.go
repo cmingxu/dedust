@@ -70,7 +70,7 @@ func LiteserverIps(c *cli2.Context) error {
 }
 
 func intToIp(ip uint64) string {
-	return fmt.Sprintf("%d.%d.%d.%d", byte(ip), byte(ip>>8), byte(ip>>16), byte(ip>>24))
+	return fmt.Sprintf("%d.%d.%d.%d", byte(ip>>24), byte(ip>>16), byte(ip>>8), byte(ip))
 }
 
 func ipinfoio(ip string) error {

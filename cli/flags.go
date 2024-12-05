@@ -192,4 +192,22 @@ var (
 		Value: "",
 		Usage: "Set the tonapi ip, instead of using domain",
 	}
+
+	skippedPool = cli2.StringFlag{
+		Name:  "skipped-pool",
+		Value: "EQAjNbON8Bw_1H56jc8YMtM-jd1VS94nFczAWE6U85Hj6hDk",
+		Usage: "Set the skipped pool",
+	}
+
+	skippedVictims = cli2.StringFlag{
+		Name:  "skipped-victims",
+		Value: "EQDa6ts3gUF9CquZdVGLGkdOY4mluPmP2k_T2ROOCUZiiNNA",
+		Usage: "Set the skipped victims",
+	}
+
+	generateG = cli2.BoolFlag{
+		Name:  "generate-g",
+		Value: false,
+		Usage: "Set whether generate G",
+	}
 )

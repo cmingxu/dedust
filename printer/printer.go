@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
@@ -75,12 +77,16 @@ type Printer struct {
 	upperlimit *big.Int
 	lowerlimit *big.Int
 
-	httpClt *http.Client
+	httpClt   *http.Client
+	httpTrace *httptrace.ClientTrace
 
 	db *sqlx.DB
 
 	// v4 wallet mode 0 or 5
 	v4walletMode int64
+
+	skippedPoolAddress     []string
+	skippedVictimAccountId []string
 }
 
 func NewPrinter(
@@ -100,20 +106,24 @@ func NewPrinter(
 	lowerlimit string,
 	walletMode int64,
 	mysql string,
+	skippedPoolAddress []string,
+	skippedVictimAccountId []string,
 ) (*Printer, error) {
 	p := &Printer{
-		tonConfig:           tonConfig,
-		wsEndpoint:          wsEndpoint,
-		botPrivateKey:       botprivateKey,
-		addr:                addr,
-		sendCnt:             sendCnt,
-		useTonAPI:           useTonAPI,
-		useTonAPIBlockchain: useTonAPIBlockchain,
-		useTonCenter:        useTonCenter,
-		useTonCenterV3:      useTonCenterV3,
-		useANDL:             useANDL,
-		enableTracing:       enableTracing,
-		v4walletMode:        walletMode,
+		tonConfig:              tonConfig,
+		wsEndpoint:             wsEndpoint,
+		botPrivateKey:          botprivateKey,
+		addr:                   addr,
+		sendCnt:                sendCnt,
+		useTonAPI:              useTonAPI,
+		useTonAPIBlockchain:    useTonAPIBlockchain,
+		useTonCenter:           useTonCenter,
+		useTonCenterV3:         useTonCenterV3,
+		useANDL:                useANDL,
+		enableTracing:          enableTracing,
+		v4walletMode:           walletMode,
+		skippedPoolAddress:     skippedPoolAddress,
+		skippedVictimAccountId: skippedVictimAccountId,
 	}
 
 	var err error
@@ -155,18 +165,48 @@ func NewPrinter(
 	}
 	dialer := &net.Dialer{
 		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
+		KeepAlive: 2 * time.Second,
 		DualStack: true,
+		KeepAliveConfig: net.KeepAliveConfig{
+			Enable: true,
+		},
 	}
-	http.DefaultTransport.(*http.Transport).DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+
+	t := http.DefaultTransport.(*http.Transport).Clone()
+
+	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 		log.Debug().Msgf("address original = %s", addr)
 		if addr == "tonapi.io:443" {
 			addr = "116.202.150.118:443"
 		}
+
+		if addr == "toncenter.com:443" {
+			addr = "104.26.0.179:443"
+		}
 		return dialer.DialContext(ctx, network, addr)
 	}
 
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	t.MaxConnsPerHost = 100
+	t.MaxIdleConns = 100
+	t.MaxIdleConnsPerHost = 100
+	t.IdleConnTimeout = 0
+
+	p.httpClt.Transport = t
+
+	p.httpTrace = &httptrace.ClientTrace{
+		GetConn:      func(hostPort string) { log.Debug().Msgf("starting to create conn ", hostPort) },
+		GotConn:      func(info httptrace.GotConnInfo) { log.Debug().Msgf("connection established %+v", info) },
+		DNSStart:     func(info httptrace.DNSStartInfo) { log.Debug().Msgf("starting to look up dns %+v", info) },
+		DNSDone:      func(info httptrace.DNSDoneInfo) { log.Debug().Msgf("done looking up dns", info) },
+		ConnectStart: func(network, addr string) { log.Debug().Msgf("starting tcp connection %s, %s", network, addr) },
+		ConnectDone: func(network, addr string, err error) {
+			log.Debug().Msgf("tcp connection created %s %s %+v", network, addr, err)
+		},
+		WroteHeaders:         func() { log.Debug().Msgf("wrote headers") },
+		WroteRequest:         func(info httptrace.WroteRequestInfo) { log.Debug().Msgf("wrote request %+v", info) },
+		GotFirstResponseByte: func() { log.Debug().Msgf("got first response byte") },
+	}
 
 	return p, nil
 }
@@ -221,13 +261,13 @@ func (p *Printer) Run() error {
 			log.Debug().Msgf("chance:  %+s", chance.ShortDump())
 			if p.MeetRequirement(&chance) {
 				poolAddr := address.MustParseAddr(chance.PoolAddress)
-				botInAmount := tlb.MustFromNano(stringToBigInt(chance.BotIn), 9)
+				botInAmount := stringToBigInt(chance.BotIn)
 				nextLimit := botInAmount
 
 				limitBN := stringToBigInt(chance.BotJettonOut)
-				// set limit as 99.95 of expected
-				limitBN9995 := new(big.Int).Div(new(big.Int).Mul(limitBN, big.NewInt(9995)), big.NewInt(10000))
-				limit := tlb.MustFromNano(limitBN9995, 9)
+				// set limit as 99.99 of expected
+				limitBN9999 := new(big.Int).Div(new(big.Int).Mul(limitBN, big.NewInt(9999)), big.NewInt(10000))
+				limit := limitBN9999
 
 				// 如果 25s 内没有购买成功，放弃， 当前网络比较慢
 				deadline := time.Now().Add(25 * time.Second)
@@ -250,9 +290,9 @@ func (p *Printer) Run() error {
 
 				msg := nbot.BuildBundle(
 					poolAddr,
-					botInAmount.Nano(),
-					limit.Nano(),
-					nextLimit.Nano(),
+					botInAmount,
+					limit,
+					nextLimit,
 					uint64(deadline.Unix()),
 					gAddr,
 					p.v4walletMode,
@@ -277,44 +317,7 @@ func (p *Printer) Run() error {
 					msgTonApiBlockchain = append(msgTonApiBlockchain, c5)
 				}
 
-				if p.useANDL {
-					go func() {
-						log.Debug().Msgf("sending with ANDL %d", p.sendCnt)
-						if err = p.SendWithANDL(&chance, nbot, msgAdnl); err != nil {
-							log.Error().Err(err).Msg("failed to send")
-						}
-					}()
-				}
-
-				if p.useTonAPI {
-					go func() {
-						err := utils.TimeitReturnError("sending with TONAPI", func() error {
-							return p.SendWithTONAPI(&chance, nbot, msgTonApi)
-						})
-
-						if err != nil {
-							log.Error().Err(err).Msg("failed to send")
-						}
-					}()
-				}
-
 				httpSendCnt := 5
-				if p.useTonAPIBlockchain {
-					i := 0
-					for i < httpSendCnt {
-						go func() {
-							err := utils.TimeitReturnError("sending with TONAPI blockchain", func() error {
-								return p.SendWithTONAPIBlockchain(&chance, nbot, msgTonApiBlockchain)
-							})
-
-							if err != nil {
-								log.Error().Err(err).Msg("failed to send")
-							}
-						}()
-						i++
-					}
-				}
-
 				if p.useTonCenterV3 {
 					i := 0
 					for i < httpSendCnt {
@@ -347,6 +350,44 @@ func (p *Printer) Run() error {
 						i++
 					}
 				}
+
+				if p.useANDL {
+					go func() {
+						log.Debug().Msgf("sending with ANDL %d", p.sendCnt)
+						if err = p.SendWithANDL(&chance, nbot, msgAdnl); err != nil {
+							log.Error().Err(err).Msg("failed to send")
+						}
+					}()
+				}
+
+				if p.useTonAPI {
+					go func() {
+						err := utils.TimeitReturnError("sending with TONAPI", func() error {
+							return p.SendWithTONAPI(&chance, nbot, msgTonApi)
+						})
+
+						if err != nil {
+							log.Error().Err(err).Msg("failed to send")
+						}
+					}()
+				}
+
+				if p.useTonAPIBlockchain {
+					i := 0
+					for i < httpSendCnt {
+						go func() {
+							err := utils.TimeitReturnError("sending with TONAPI blockchain", func() error {
+								return p.SendWithTONAPIBlockchain(&chance, nbot, msgTonApiBlockchain)
+							})
+
+							if err != nil {
+								log.Error().Err(err).Msg("failed to send")
+							}
+						}()
+						i++
+					}
+				}
+
 				if err := chance.DumpToIO(p.out); err != nil {
 					log.Error().Err(err).Msg("failed to write to file")
 				}
@@ -417,9 +458,28 @@ func (p *Printer) getInfo() (uint64, tlb.Coins, error) {
 }
 
 func (p *Printer) MeetRequirement(chance *model.BundleChance) bool {
+	if len(chance.PrivateKeyOfG) == 0 {
+		log.Debug().Msg("[-] SKIP, no private key for G")
+		return false
+	}
+
 	chanceAddr := address.MustParseAddr(chance.VictimAccountId)
 	if chanceAddr.String() == p.addr.String() {
 		log.Debug().Msg("[-] SKIP, victim is me")
+		return false
+	}
+
+	if _, found := lo.Find(p.skippedPoolAddress, func(s string) bool {
+		return address.MustParseAddr(s).String() == address.MustParseAddr(chance.PoolAddress).String()
+	}); found {
+		log.Debug().Msg("[-] SKIP, pool is in skipped list")
+		return false
+	}
+
+	if _, found := lo.Find(p.skippedVictimAccountId, func(s string) bool {
+		return address.MustParseAddr(s).String() == address.MustParseAddr(chance.VictimAccountId).String()
+	}); found {
+		log.Debug().Msg("[-] SKIP, victim is in skipped list")
 		return false
 	}
 
@@ -562,7 +622,8 @@ func (p *Printer) SendWithTONAPIBlockchain(chance *model.BundleChance,
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", TOKEN))
-	resp, err := p.httpClt.Do(req)
+	clientTraceCtx := httptrace.WithClientTrace(req.Context(), p.httpTrace)
+	resp, err := p.httpClt.Do(req.WithContext(clientTraceCtx))
 	if err != nil {
 		return err
 	}
@@ -615,7 +676,8 @@ func (p *Printer) SendWithTONAPI(chance *model.BundleChance,
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", TOKEN))
-	resp, err := p.httpClt.Do(req)
+	clientTraceCtx := httptrace.WithClientTrace(req.Context(), p.httpTrace)
+	resp, err := p.httpClt.Do(req.WithContext(clientTraceCtx))
 	if err != nil {
 		return err
 	}
@@ -669,7 +731,8 @@ func (p *Printer) SendWithTONCenter(chance *model.BundleChance,
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Api-Key", TONCENTER_API_KEY)
-	resp, err := p.httpClt.Do(req)
+	clientTraceCtx := httptrace.WithClientTrace(req.Context(), p.httpTrace)
+	resp, err := p.httpClt.Do(req.WithContext(clientTraceCtx))
 	if err != nil {
 		return err
 	}
@@ -722,7 +785,8 @@ func (p *Printer) SendWithTONCenterV3(chance *model.BundleChance,
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("X-Api-Key", TONCENTER_API_KEY)
-	resp, err := p.httpClt.Do(req)
+	clientTraceCtx := httptrace.WithClientTrace(req.Context(), p.httpTrace)
+	resp, err := p.httpClt.Do(req.WithContext(clientTraceCtx))
 	if err != nil {
 		return err
 	}
