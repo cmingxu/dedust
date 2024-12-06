@@ -16,6 +16,24 @@ import (
 	"github.com/xssnick/tonutils-go/address"
 )
 
+const TonAPIMemPoolEndpoint = "wss://tonapi.io/v2/websocket?token=%s"
+
+type MPRequest struct {
+	Id      int      `json:"id"`
+	Method  string   `json:"method"`
+	JsonRPC string   `json:"jsonrpc"`
+	Params  []string `json:"params"`
+}
+
+type WebsocketMPResponse struct {
+	Boc              string   `json:"boc"`
+	InvolvedAccounts []string `json:"involved_accounts"`
+}
+
+func (w WebsocketMPResponse) String() string {
+	return fmt.Sprintf("boc: %s, involved_accounts: %s", w.Boc, w.InvolvedAccounts)
+}
+
 func MemPoolCheck(dsn string) error {
 	db, err := sqlx.Connect("mysql", dsn)
 	if err != nil {
@@ -74,7 +92,7 @@ func MemPoolCheck(dsn string) error {
 		}
 
 		result := gjson.Parse(string(message))
-		mpResponse := MPResponse{
+		mpResponse := WebsocketMPResponse{
 			Boc: result.Get("params.boc").String(),
 		}
 		result.Get("params.involved_accounts").ForEach(func(_, value gjson.Result) bool {

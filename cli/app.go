@@ -22,6 +22,7 @@ func Run(args []string) int {
 			syncPoolCmd,
 			detectCmd,
 			memPoolCmd,
+			memPoolAllCmd,
 			deployCmd,
 			walletInfoCmd,
 			tonupCmd,

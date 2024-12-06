@@ -17,19 +17,13 @@ const PoolRenewInterval = 60 * 60 * time.Second
 // filter pool
 const OutstandingPoolOnly = true
 
-func (d *Detector) PerodicallyRenewPoolsFromDB(ctx context.Context,
-	poolsRenewedCh chan struct{}) {
+func (d *Detector) PerodicallyRenewPoolsFromDB(ctx context.Context) {
 	for {
 		select {
 		case <-d.poolRenewTimer.C:
 			log.Debug().Msg("renew pool from db")
-			err, renewed := d.renewPoolsFromDB(d.db)
-			if err != nil {
+			if err := d.renewPoolsFromDB(d.db); err != nil {
 				log.Error().Err(err).Msg("renew pool from db failed")
-			}
-
-			if renewed {
-				poolsRenewedCh <- struct{}{}
 			}
 
 			log.Debug().Msgf("total pool count is %d now", len(d.poolMap))
@@ -39,23 +33,21 @@ func (d *Detector) PerodicallyRenewPoolsFromDB(ctx context.Context,
 	}
 }
 
-func (d *Detector) renewPoolsFromDB(db *sqlx.DB) (err error, renewed bool) {
+func (d *Detector) renewPoolsFromDB(db *sqlx.DB) (err error) {
 	d.poolLock.Lock()
 	defer d.poolLock.Unlock()
 	defer d.poolRenewTimer.Reset(PoolRenewInterval)
 
 	pools, err := model.LoadPoolsFromDB(d.db, OutstandingPoolOnly)
 	if err != nil {
-		return err, false
+		return err
 	}
 
-	renewed = false
 	for _, p := range pools {
 		if _, ok := d.poolMap[utils.RawAddr(address.MustParseAddr(p.Address))]; !ok {
 			d.poolMap[utils.RawAddr(address.MustParseAddr(p.Address))] = p
-			renewed = true
 		}
 	}
 
-	return nil, true
+	return nil
 }

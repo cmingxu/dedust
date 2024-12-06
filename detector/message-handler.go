@@ -3,13 +3,16 @@ package detector
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/cmingxu/dedust/model"
+	"github.com/cmingxu/dedust/utils"
 	mywallet "github.com/cmingxu/dedust/wallet"
 	"github.com/patrickmn/go-cache"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/tvm/cell"
 )
@@ -36,41 +39,25 @@ func (d *Detector) outerMessageFromBOC(boc string) (*tlb.Message, error) {
 	return &msg, nil
 }
 
-func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*model.Trade, error) {
-	log.Debug().Msgf("=========================================")
-	log.Debug().Msgf("=======         BEGIN        ============")
-	log.Debug().Msgf("=========================================")
-
+func (d *Detector) parseTrade(msg *tlb.ExternalMessage) (*model.Pool, *model.Trade, error) {
 	dest := msg.DestAddr()
 	dest.SetBounce(true)
-	log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
-	log.Debug().Msgf("ExternalIn Dst(Bounceable): %s", dest.String())
-	log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
-	// log.Debug().Msgf("%s", msg.Body.Dump())
-	log.Debug().Msgf("External Body RefNum: %d", msg.Body.RefsNum())
-
-	d.p("=========================================\n")
-	d.p("=======         BEGIN        ============\n")
-	d.p("=========================================\n")
-	dstAddr := msg.DestAddr()
-	dstAddr.SetBounce(true)
-	d.p("ExternalIn Dst: %s %s\n", dstAddr.String(), time.Now())
-	d.p("ExternalIn Dst(Bounceable): %s", dest.String())
-	d.p("External Body RefNum: %d\n", msg.Body.RefsNum())
+	// log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
 
 	slice := msg.Body.BeginParse()
-	magic := slice.MustPreloadUInt(32)
-
-	trade := model.Trade{
-		Hash:           hex.EncodeToString(msg.Body.Hash()),
-		PoolAddr:       pool.Address,
-		Address:        msg.DestAddr().String(),
-		LatestReserve0: pool.Asset0Reserve,
-		LatestReserve1: pool.Asset1Reserve,
-		LatestPoolLt:   pool.Lt,
-		PoolUpdateAt:   pool.UpdatedAt,
-		FirstSeen:      time.Now(),
+	if slice.BitsLeft() < 32 {
+		return nil, nil, errors.New("magic wallet code not enough bits")
 	}
+
+	magic := slice.MustPreloadUInt(32)
+	trade := model.Trade{
+		Hash:      hex.EncodeToString(msg.Body.Hash()),
+		Address:   msg.DestAddr().String(),
+		FirstSeen: time.Now(),
+	}
+
+	var pool *model.Pool
+	var err error
 
 	if msg.Body.RefsNum() != 1 {
 		trade.HasMultipleActions = true
@@ -81,15 +68,12 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 		trade.WalletType = model.WalletTypeV5R1
 		msg := mywallet.V5R1Header{}
 		if err := tlb.LoadFromCell(&msg, slice); err != nil {
-			return &trade, errors.Wrap(err, "failed to load V5R1Header")
+			return nil, &trade, errors.Wrap(err, "failed to load V5R1Header")
 		}
 		if err := tlb.LoadFromCell(&internalMsg,
 			msg.Action.OutMsg.BeginParse()); err != nil {
-			return &trade, errors.Wrap(err, "failed to load InternalMessage")
+			return nil, &trade, errors.Wrap(err, "failed to load InternalMessage")
 		}
-		d.p("V5 Internal Cell: %s\n", msg.Action.OutMsg.Dump())
-		d.p("V5 Slice BitsLeft: %d RefNum %d \n", slice.BitsLeft(), slice.RefsNum())
-		d.p("V5 msg empty bitsleft: %d, refnums:  %d\n", msg.Action.Empty.BitsSize(), msg.Action.Empty.RefsNum())
 		if msg.Action.Empty.RefsNum() > 0 {
 			trade.HasMultipleActions = true
 		}
@@ -111,12 +95,9 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 		}
 
 		trade.WalletType = model.WalletTypeBot
-		d.p("Unknown WalletType: (%s) %s\n", trade.WalletType, msg.DstAddr.String())
 		goto FINISH
 
 	CORRECT:
-		d.p("Trade WalletType %s\n", trade.WalletType)
-		d.p("V3/V4 branch Internal Cell: %s\n", internalCell.Dump())
 		if err := tlb.LoadFromCell(&internalMsg, internalCell.BeginParse()); err != nil {
 			log.Debug().Err(err).Msg("failed to load InternalMessage")
 			trade.WalletType = model.WalletTypeBot
@@ -124,35 +105,49 @@ func (d *Detector) parseTrade(pool *model.Pool, msg *tlb.ExternalMessage) (*mode
 		}
 	}
 
-	if err := d.parseInternalMessage(&internalMsg, &trade); err != nil {
-		log.Debug().Err(err).Msg("failed to parse internal message")
+	pool, err = d.parseInternalMessage(&internalMsg, &trade)
+	if err != nil {
+		// log.Debug().Err(err).Msg("failed to parse internal message")
+		return nil, &trade, err
+	}
+
+	if pool != nil {
+		trade.PoolAddr = pool.Address
+		trade.LatestReserve0 = pool.Asset0Reserve
+		trade.LatestReserve1 = pool.Asset1Reserve
+		trade.LatestPoolLt = pool.Lt
+		trade.PoolUpdateAt = pool.UpdatedAt
 	}
 
 FINISH:
 	d.p("Finish Internal Message: %+v\n", internalMsg)
 	trade.AmountIn = internalMsg.Amount.Nano().String()
-	return &trade, d.saveTrade(&trade)
+	return pool, &trade, d.saveTrade(&trade)
 }
 
-func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.Trade) error {
+func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.Trade) (*model.Pool, error) {
+	var (
+		poolAddr *address.Address
+		pool     *model.Pool = nil
+	)
+
 	bodySlice := msg.Body.BeginParse()
 	if bodySlice.BitsLeft() < 32 {
-		return errors.New("not enough bits")
+		return pool, errors.New("opcode not enough bits")
 	}
 
 	opcode := bodySlice.MustPreloadUInt(32)
-
 	switch opcode {
+	case 0:
+		// log.Debug().Msgf("InternalMessage Opcode 0 transfer from %s to %s amount %s",
+		//	trade.Address, msg.DstAddr.String(), msg.Amount.Nano().String())
+		d.tonTransferCache.Set(trade.Address, struct{}{}, cache.DefaultExpiration)
 	case DedustNativeSwap:
-		nativeSwap, err := decodeDedustNativeSwap(msg.Body)
+		nativeSwap, err := decodeDedustBuy(msg.Body)
 		if err != nil {
-			return errors.Wrap(err, "failed to decode DedustNativeSwap")
+			return pool, errors.Wrap(err, "failed to decode DedustNativeSwap")
 		}
-		log.Debug().Msgf("(BUY) NativeSwap: %+v", nativeSwap)
-		d.p("NativeSwap: %+v\n", nativeSwap)
-		d.p("NativeSwap(SwapParams): %+v\n", nativeSwap.SwapParams)
-		d.p("NativeSwap(SwapStep): %+v\n", nativeSwap.SwapStep)
-
+		log.Debug().Msgf("(Dedust BUY) %s NativeSwap: %+v", trade.Address, nativeSwap)
 		trade.TradeType = model.TradeTypeBuy
 		trade.SwapType = model.SwapTypeNative
 		trade.Amount = nativeSwap.Amount.Nano().String()
@@ -173,14 +168,19 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 			trade.HasNextStep = true
 		}
 
+		if nativeSwap.SwapStep.PoolAddr != nil {
+			poolAddr = nativeSwap.SwapStep.PoolAddr
+		}
+
 	case JettonTransfer:
 		d.sellingCache.Set(trade.PoolAddr, struct{}{}, cache.DefaultExpiration)
 
-		transfer, err := decodeJettonTransfer(msg.Body)
+		transfer, err := decodeDedustSell(msg.Body)
 		if err != nil {
-			return errors.Wrap(err, "failed to decode JettonTransfer")
+			return pool, errors.Wrap(err, "failed to decode JettonTransfer")
 		}
-		log.Debug().Msgf("(SELL) JettonTransfer: %+v", transfer)
+
+		log.Debug().Msgf("(Dedust SELL) JettonTransfer: %s %+v", trade.Address, transfer)
 		trade.TradeType = model.TradeTypeSell
 		trade.SwapType = model.SwapTypeJetton
 		trade.Amount = transfer.Amount.Nano().String()
@@ -198,24 +198,38 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		if swapParams.RejectPayload != nil {
 			trade.RejectBOC = hex.EncodeToString(swapParams.RejectPayload.ToBOC())
 		}
+
+		if swapStep.PoolAddr != nil {
+			poolAddr = swapStep.PoolAddr
+		}
+
 	case JettonBurn:
-		d.sellingCache.Set(trade.PoolAddr, struct{}{}, cache.DefaultExpiration)
-		// https://tonviewer.com/transaction/d5cb3a50271a86222fbbd269c64a65e97d25fea16aaa43ce9ea37a08e7e2d7b0
-		log.Debug().Msg("(LP Burn)")
-		d.p("LP Burn: %s\n", msg.Body.Dump())
+		log.Debug().Msgf("(Dedust BURN) LP JettonBurn: %s", trade.Address)
+		poolAddr, err := decodeDedustWithdrawLP(msg.Body)
+		if err != nil {
+			d.sellingCache.Set(poolAddr, struct{}{}, cache.DefaultExpiration)
+			// https://tonviewer.com/transaction/d5cb3a50271a86222fbbd269c64a65e97d25fea16aaa43ce9ea37a08e7e2d7b0
+		}
 
 	default:
-		return errors.New("unknown opcode")
+		return pool, errors.New("internal unknown opcode")
 	}
 
-	return nil
+	if poolAddr != nil {
+		var ok bool
+		if pool, ok = d.poolMap[utils.RawAddr(poolAddr)]; !ok {
+			return pool, fmt.Errorf("pool not found %s", poolAddr.String())
+		}
+	}
+
+	return pool, nil
 }
 
 func (d *Detector) saveTrade(trade *model.Trade) error {
 	return trade.SaveToDB(d.db)
 }
 
-func decodeDedustNativeSwap(cell *cell.Cell) (*NativeSwap, error) {
+func decodeDedustBuy(cell *cell.Cell) (*NativeSwap, error) {
 	var nativeSwap NativeSwap
 	if err := tlb.LoadFromCell(&nativeSwap, cell.BeginParse()); err != nil {
 		return nil, errors.Wrap(err, "failed to load SwapRequest")
@@ -224,10 +238,14 @@ func decodeDedustNativeSwap(cell *cell.Cell) (*NativeSwap, error) {
 }
 
 // aka. this is the sell transaction
-func decodeJettonTransfer(cell *cell.Cell) (*JettonTransferParams, error) {
+func decodeDedustSell(cell *cell.Cell) (*JettonTransferParams, error) {
 	var transfer JettonTransferParams
 	if err := tlb.LoadFromCell(&transfer, cell.BeginParse()); err != nil {
 		return nil, errors.Wrap(err, "failed to load JettonTransfer")
 	}
 	return &transfer, nil
+}
+
+func decodeDedustWithdrawLP(cell *cell.Cell) (poolAddr string, err error) {
+	return "", nil
 }
