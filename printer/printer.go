@@ -361,15 +361,20 @@ func (p *Printer) Run() error {
 				}
 
 				if p.useTonAPI {
-					go func() {
-						err := utils.TimeitReturnError("sending with TONAPI", func() error {
-							return p.SendWithTONAPI(&chance, nbot, msgTonApi)
-						})
+					i := 0
+					for i < httpSendCnt {
+						go func() {
+							err := utils.TimeitReturnError("sending with TONAPI", func() error {
+								return p.SendWithTONAPI(&chance, nbot, msgTonApi)
+							})
 
-						if err != nil {
-							log.Error().Err(err).Msg("failed to send")
-						}
-					}()
+							if err != nil {
+								log.Error().Err(err).Msg("failed to send")
+							}
+						}()
+
+						i++
+					}
 				}
 
 				if p.useTonAPIBlockchain {
@@ -574,7 +579,12 @@ func (p *Printer) SendWithANDL(
 
 			nid, _ := c.Value("_ton_node_sticky").(uint32)
 			err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
-				return nbot.SendMany(c, p.v4walletMode, msgs, false)
+				count := 0
+				for count < 10 {
+					nbot.SendMany(c, p.v4walletMode, msgs, false)
+					count++
+				}
+				return nil
 			})
 
 			if err != nil {

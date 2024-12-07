@@ -116,6 +116,12 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 		return nil, ErrRiskAsTradeIsBundle
 	}
 
+	if _, found := d.tonTransferCache.Get(trade.Address); found {
+		d.p("$ %s ton transfer found, skip\n", trade.Address)
+		return nil, ErrRiskAsTradeIsBundle
+
+	}
+
 	h := hashOfChance(pool.Address, trade.Amount, trade.Limit)
 	d.p("- Hash %s\n", h)
 	if _, found := d.chanceCache.Get(h); found {
