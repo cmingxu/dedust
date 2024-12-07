@@ -159,53 +159,53 @@ func (d *Detector) Run(preUpdate bool) error {
 		default:
 		}
 
-		mpResponse := <-mpResponseCh
 		//	log.Debug().Msgf("received mempool response %+s", mpResponse.ShortString())
 
-		if len(mpResponse.Boc) == 0 {
-			log.Warn().Msg("empty BOC")
-			continue
-		}
-
-		outMessage, err := d.outerMessageFromBOC(mpResponse.Boc)
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to parse external message")
-			continue
-		}
-
-		if tlb.MsgTypeExternalIn != outMessage.MsgType {
-			log.Warn().Msg("not external message")
-			continue
-		}
-
-		// trade is return even err is not nil
-		pool, trade, err := d.parseTrade(outMessage.AsExternalIn())
-		if err != nil {
-			continue
-		}
-
-		if pool == nil {
-			continue
-		}
-
-		if chance, err := d.BuildBundleChance(pool, trade); err == nil {
-			log.Debug().Msgf("BundleChance %+v", chance)
-
-			if _, found := d.cooldownCache.Get(pool.Address); found {
-				log.Debug().Msg("cooldown cache hit")
-				continue
+		go func(mp *MPResponse) {
+			if len(mp.Boc) == 0 {
+				log.Warn().Msg("empty BOC")
+				return
 			}
 
-			d.cooldownCache.Set(pool.Address, struct{}{}, cache.DefaultExpiration)
-			bundleChanceCh <- chance
-		} else {
-			log.Debug().Err(err).Msg("failed to build bundle chance")
-		}
+			outMessage, err := d.outerMessageFromBOC(mp.Boc)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to parse external message")
+				return
+			}
 
-		if err != nil {
-			log.Err(err).Msg("failed to handle external message")
-			continue
-		}
+			if tlb.MsgTypeExternalIn != outMessage.MsgType {
+				log.Warn().Msg("not external message")
+				return
+			}
+
+			// trade is return even err is not nil
+			pool, trade, err := d.parseTrade(outMessage.AsExternalIn())
+			if err != nil {
+				return
+			}
+
+			if pool == nil {
+				return
+			}
+
+			if chance, err := d.BuildBundleChance(pool, trade); err == nil {
+				log.Debug().Msgf("BundleChance %+v", chance)
+
+				if _, found := d.cooldownCache.Get(pool.Address); found {
+					log.Debug().Msg("cooldown cache hit")
+				}
+
+				d.cooldownCache.Set(pool.Address, struct{}{}, cache.DefaultExpiration)
+				bundleChanceCh <- chance
+			} else {
+				log.Debug().Err(err).Msg("failed to build bundle chance")
+
+			}
+
+			if err != nil {
+				log.Err(err).Msg("failed to handle external message")
+			}
+		}(<-mpResponseCh)
 	}
 }
 

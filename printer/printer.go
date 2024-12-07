@@ -317,7 +317,7 @@ func (p *Printer) Run() error {
 					msgTonApiBlockchain = append(msgTonApiBlockchain, c5)
 				}
 
-				httpSendCnt := 5
+				httpSendCnt := 1
 				if p.useTonCenterV3 {
 					i := 0
 					for i < httpSendCnt {
@@ -580,7 +580,7 @@ func (p *Printer) SendWithANDL(
 			nid, _ := c.Value("_ton_node_sticky").(uint32)
 			err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
 				count := 0
-				for count < 10 {
+				for count < 1 {
 					nbot.SendMany(c, p.v4walletMode, msgs, false)
 					count++
 				}
