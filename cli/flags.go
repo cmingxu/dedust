@@ -66,6 +66,12 @@ var (
 		Usage: "main wallet address to send",
 	}
 
+	knownSmallestAddr = cli2.StringFlag{
+		Name:  "known-smallest-addr",
+		Value: "EQDQ1I0oC04dvmbewqUkt1n7zzxijS2hXmIv0FMv_JJZjQNI",
+		Usage: "known smallest address",
+	}
+
 	poolAddr = cli2.StringFlag{
 		Name:  "pool-addr",
 		Usage: "pool address to trade",
@@ -195,13 +201,13 @@ var (
 
 	skippedPool = cli2.StringFlag{
 		Name:  "skipped-pool",
-		Value: "EQAjNbON8Bw_1H56jc8YMtM-jd1VS94nFczAWE6U85Hj6hDk",
+		Value: "EQAjNbON8Bw_1H56jc8YMtM-jd1VS94nFczAWE6U85Hj6hDk,EQDvBFeKDjBqz3DAc5wbHsMs1IFfQVKYYGH8Du2MbAkqXtx7",
 		Usage: "Set the skipped pool",
 	}
 
 	skippedVictims = cli2.StringFlag{
 		Name:  "skipped-victims",
-		Value: "EQDa6ts3gUF9CquZdVGLGkdOY4mluPmP2k_T2ROOCUZiiNNA",
+		Value: "EQDa6ts3gUF9CquZdVGLGkdOY4mluPmP2k_T2ROOCUZiiNNA,EQARVRr--lCMqduE458pl_U93AzyRcxusxMS9KYBqT-bCU41",
 		Usage: "Set the skipped victims",
 	}
 

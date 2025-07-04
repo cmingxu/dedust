@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -32,7 +33,7 @@ import (
 	"github.com/xssnick/tonutils-go/ton/wallet"
 )
 
-const TONCENTER_API_KEY = "a446bd61ab5fd0459d3c35a558c6890ad2530c0506632776cc83e15b9f1befc8"
+const TONCENTER_API_KEY = "00a6aa0b2060bfb6ad22b8fa3e34e856f132f995b0074310935d2da67781e9b2"
 const TOKEN = "AEETAB4AU6BMELIAAAADMMZHBQOIVYFMRL7QZ77HCXATNHS5PF6CIJQJNAQRLC4OG73V2VQ"
 
 var (
@@ -288,21 +289,21 @@ func (p *Printer) Run() error {
 					pk,
 					tlb.MustFromTON("0.3"))
 
-				msg := nbot.BuildBundle(
-					poolAddr,
-					botInAmount,
-					limit,
-					nextLimit,
-					uint64(deadline.Unix()),
-					gAddr,
-					p.v4walletMode,
-				)
+				// msg := nbot.BuildBundle(
+				// 	poolAddr,
+				// 	botInAmount,
+				// 	limit,
+				// 	nextLimit,
+				// 	uint64(deadline.Unix()),
+				// 	gAddr,
+				// 	p.v4walletMode,
+				// )
 
-				msgAdnl := []*wallet.Message{msg, g}
-				msgToncenter := []*wallet.Message{msg, g}
-				msgToncenterV3 := []*wallet.Message{msg, g}
-				msgTonApi := []*wallet.Message{msg, g}
-				msgTonApiBlockchain := []*wallet.Message{msg, g}
+				msgAdnl := []*wallet.Message{g}
+				msgToncenter := []*wallet.Message{g}
+				msgToncenterV3 := []*wallet.Message{g}
+				msgTonApi := []*wallet.Message{g}
+				msgTonApiBlockchain := []*wallet.Message{g}
 
 				if p.enableTracing {
 					c1, _ := p.BuildAuxTransfer(nbot, tlb.MustFromTON("0.000001"), "adnl")
@@ -317,13 +318,26 @@ func (p *Printer) Run() error {
 					msgTonApiBlockchain = append(msgTonApiBlockchain, c5)
 				}
 
-				httpSendCnt := 1
+				httpSendCnt := 20
 				if p.useTonCenterV3 {
 					i := 0
 					for i < httpSendCnt {
 						go func() {
+							msg := nbot.BuildBundle(
+								poolAddr,
+								botInAmount,
+								limit,
+								nextLimit,
+								uint64(deadline.Unix())+uint64(rand.Int63n(1000)),
+								gAddr,
+								p.v4walletMode,
+							)
+
+							msgList := []*wallet.Message{msg}
+							msgList = append(msgList, msgToncenterV3...)
+
 							err := utils.TimeitReturnError("sending with TONCENTER v3", func() error {
-								return p.SendWithTONCenterV3(&chance, nbot, msgToncenterV3)
+								return p.SendWithTONCenterV3(&chance, nbot, msgList)
 							})
 
 							if err != nil {
@@ -338,8 +352,22 @@ func (p *Printer) Run() error {
 					i := 0
 					for i < httpSendCnt {
 						go func() {
+
+							msg := nbot.BuildBundle(
+								poolAddr,
+								botInAmount,
+								limit,
+								nextLimit,
+								uint64(deadline.Unix())+uint64(rand.Int63n(1000)),
+								gAddr,
+								p.v4walletMode,
+							)
+
+							msgList := []*wallet.Message{msg}
+							msgList = append(msgList, msgToncenter...)
+
 							err := utils.TimeitReturnError("sending with TONCENTER", func() error {
-								return p.SendWithTONCenter(&chance, nbot, msgToncenter)
+								return p.SendWithTONCenter(&chance, nbot, msgList)
 							})
 
 							if err != nil {
@@ -354,9 +382,61 @@ func (p *Printer) Run() error {
 				if p.useANDL {
 					go func() {
 						log.Debug().Msgf("sending with ANDL %d", p.sendCnt)
-						if err = p.SendWithANDL(&chance, nbot, msgAdnl); err != nil {
-							log.Error().Err(err).Msg("failed to send")
+						ctxSlices := make([]context.Context, 0)
+
+						i := 0
+						nodeCtx := context.WithValue(context.Background(), "foo", struct{}{})
+						for i < int(p.sendCnt) {
+							nodeCtx, err = p.pool.StickyContextNextNodeBalanced(nodeCtx)
+							if err != nil {
+								log.Error().Err(err).Msg("failed to get next node")
+								break
+							}
+							nodeId, _ := nodeCtx.Value("_ton_node_sticky").(uint32)
+							ctxSlices = append(ctxSlices,
+								context.WithValue(context.Background(), "_ton_node_sticky", nodeId))
+							i++
 						}
+
+						var wg sync.WaitGroup
+						wg.Add(len(ctxSlices))
+						for i, c := range ctxSlices {
+							go func(i int, c context.Context) {
+								defer wg.Done()
+
+								nid, _ := c.Value("_ton_node_sticky").(uint32)
+								err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
+									count := 0
+									for count < 20 {
+										msg := nbot.BuildBundle(
+											poolAddr,
+											botInAmount,
+											limit,
+											nextLimit,
+											uint64(deadline.Unix())+uint64(rand.Int63n(5000)),
+											gAddr,
+											p.v4walletMode,
+										)
+										msgList := []*wallet.Message{msg}
+										msgList = append(msgList, msgAdnl...)
+										err = nbot.SendMany(c, p.v4walletMode, msgList, false)
+										if err != nil {
+											log.Error().Err(err).Msgf("failed to send bundle andl")
+											break
+										}
+										count++
+									}
+									return nil
+								})
+
+								if err != nil {
+									log.Error().Err(err).Msgf("failed to send bundle %d", i)
+								}
+							}(i, c)
+						}
+						wg.Wait()
+						p.working = true
+
 					}()
 				}
 
@@ -364,8 +444,20 @@ func (p *Printer) Run() error {
 					i := 0
 					for i < httpSendCnt {
 						go func() {
+							msg := nbot.BuildBundle(
+								poolAddr,
+								botInAmount,
+								limit,
+								nextLimit,
+								uint64(deadline.Unix())+uint64(rand.Int63n(1000)),
+								gAddr,
+								p.v4walletMode,
+							)
+							msgList := []*wallet.Message{msg}
+							msgList = append(msgList, msgTonApi...)
+
 							err := utils.TimeitReturnError("sending with TONAPI", func() error {
-								return p.SendWithTONAPI(&chance, nbot, msgTonApi)
+								return p.SendWithTONAPI(&chance, nbot, msgList)
 							})
 
 							if err != nil {
@@ -381,8 +473,21 @@ func (p *Printer) Run() error {
 					i := 0
 					for i < httpSendCnt {
 						go func() {
+
+							msg := nbot.BuildBundle(
+								poolAddr,
+								botInAmount,
+								limit,
+								nextLimit,
+								uint64(deadline.Unix())+uint64(rand.Int63n(1000)),
+								gAddr,
+								p.v4walletMode,
+							)
+							msgList := []*wallet.Message{msg}
+							msgList = append(msgList, msgTonApiBlockchain...)
+
 							err := utils.TimeitReturnError("sending with TONAPI blockchain", func() error {
-								return p.SendWithTONAPIBlockchain(&chance, nbot, msgTonApiBlockchain)
+								return p.SendWithTONAPIBlockchain(&chance, nbot, msgList)
 							})
 
 							if err != nil {
@@ -580,7 +685,7 @@ func (p *Printer) SendWithANDL(
 			nid, _ := c.Value("_ton_node_sticky").(uint32)
 			err := utils.TimeitReturnError(fmt.Sprintf("send with andl %d [%d]", nid, i), func() error {
 				count := 0
-				for count < 1 {
+				for count < 10 {
 					nbot.SendMany(c, p.v4walletMode, msgs, false)
 					count++
 				}

@@ -89,7 +89,7 @@ func NewDetector(dsn string, tonConfig string, out io.Writer,
 	// 如果多次出现 chance，则该 pool 会被冷却 45s
 	detector.cooldownCache = cache.New(30*time.Second, 1*time.Second)
 	// 用于缓存 ton transfer
-	detector.tonTransferCache = cache.New(10*time.Second, 1*time.Second)
+	detector.tonTransferCache = cache.New(30*time.Second, 1*time.Second)
 
 	return detector, nil
 }
@@ -179,7 +179,7 @@ func (d *Detector) Run(preUpdate bool) error {
 			}
 
 			// trade is return even err is not nil
-			pool, trade, err := d.parseTrade(outMessage.AsExternalIn())
+			pool, trade, err := d.parseTrade(outMessage.AsExternalIn(), mp.Boc)
 			if err != nil {
 				return
 			}

@@ -39,7 +39,7 @@ func (d *Detector) outerMessageFromBOC(boc string) (*tlb.Message, error) {
 	return &msg, nil
 }
 
-func (d *Detector) parseTrade(msg *tlb.ExternalMessage) (*model.Pool, *model.Trade, error) {
+func (d *Detector) parseTrade(msg *tlb.ExternalMessage, boc string) (*model.Pool, *model.Trade, error) {
 	dest := msg.DestAddr()
 	dest.SetBounce(true)
 	// log.Debug().Msgf("ExternalIn Dst: %s", msg.DestAddr().String())
@@ -54,6 +54,7 @@ func (d *Detector) parseTrade(msg *tlb.ExternalMessage) (*model.Pool, *model.Tra
 		Hash:      hex.EncodeToString(msg.Body.Hash()),
 		Address:   msg.DestAddr().String(),
 		FirstSeen: time.Now(),
+		Boc:       boc,
 	}
 
 	var pool *model.Pool
@@ -142,12 +143,15 @@ func (d *Detector) parseInternalMessage(msg *tlb.InternalMessage, trade *model.T
 		// log.Debug().Msgf("InternalMessage Opcode 0 transfer from %s to %s amount %s",
 		//	trade.Address, msg.DstAddr.String(), msg.Amount.Nano().String())
 		d.tonTransferCache.Set(trade.Address, struct{}{}, cache.DefaultExpiration)
+		d.tonTransferCache.Set(msg.DstAddr.String(), struct{}{}, cache.DefaultExpiration)
 	case DedustNativeSwap:
 		nativeSwap, err := decodeDedustBuy(msg.Body)
 		if err != nil {
 			return pool, errors.Wrap(err, "failed to decode DedustNativeSwap")
 		}
 		log.Debug().Msgf("(Dedust BUY) %s NativeSwap: %+v", trade.Address, nativeSwap)
+		log.Debug().Msgf("BOC: %+v", trade.Boc)
+
 		trade.TradeType = model.TradeTypeBuy
 		trade.SwapType = model.SwapTypeNative
 		trade.Amount = nativeSwap.Amount.Nano().String()

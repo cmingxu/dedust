@@ -63,6 +63,8 @@ var (
 	ErrRiskAsTradeIsBundle    = errors.New("risk as trade is bundle")
 	ErrHasMultipleInternalMsg = errors.New("has multiple internal msg")
 	ErrDeadlineDetect         = errors.New("deadline too short")
+
+	ErrFailedToDetectReceipent = errors.New("failed to detect receipent")
 )
 
 func (d *Detector) p(format string, args ...interface{}) {
@@ -98,6 +100,7 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	d.p("- VictimLimit %s\n", trade.Limit)
 	d.p("- LatestReserve0 %s\n", pool.Asset0Reserve)
 	d.p("- LatestReserve1 %s\n", pool.Asset1Reserve)
+	d.p("- Recipient %s\n", trade.Recipient)
 	d.p("- Has multiple actions %t\n", trade.HasMultipleActions)
 
 	if trade.Deadline > 0 && trade.Deadline < uint64(time.Now().Unix()+4) {
@@ -114,6 +117,11 @@ func (d *Detector) BuildBundleChance(pool *model.Pool, trade *model.Trade) (*mod
 	if trade.HasNextStep {
 		d.p("$ %s is bundle, skip\n", trade.Address)
 		return nil, ErrRiskAsTradeIsBundle
+	}
+
+	if trade.Recipient == "" {
+		d.p("$ %s has no recipient, skip\n", trade.Address)
+		return nil, ErrFailedToDetectReceipent
 	}
 
 	if _, found := d.tonTransferCache.Get(trade.Address); found {
